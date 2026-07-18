@@ -46,6 +46,7 @@ async def upload_document(
 
 async def process_document(document_id: str, file_path: str, filename: str, user_id: str):
     try:
+
         text = extract_text(file_path, filename)
         chunks = chunk_text(text, document_id)
         embed_and_store_chunks(chunks)
