@@ -229,72 +229,103 @@ export const StudyRoom: React.FC = () => {
     };
   }, [documentId]);
 
-  // Periodic Presage Tracking Loop (sends focus metrics to backend)
+  // WebSocket Connection to Node.js Presage Server
+  const wsRef = useRef<WebSocket | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
   useEffect(() => {
-    if (!documentId) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    canvasRef.current = canvas;
 
-    const interval = setInterval(() => {
-      // Get or generate metrics
-      // Checks if global PresageSDK exists, otherwise fallbacks to mock simulator
-      let updatedMetrics: FocusEvent;
-
-      if ((window as any).PresageSDK) {
-        if (!(window as any).PresageSDK.isInitialized) {
-          (window as any).PresageSDK.init({
-            apiKey: import.meta.env.VITE_PRESAGE,
-          });
-        }
-        
-        const sdkData = (window as any).PresageSDK.getLatestDetections() || {};
-        
-        // Parse Presage SmartSpectra SDK
-        let currentMood = 'neutral';
-        let maxProb = 0;
-        
-        if (sdkData.expressions) {
-          for (const [expr, prob] of Object.entries(sdkData.expressions)) {
-            if ((prob as number) > maxProb) {
-              maxProb = prob as number;
-              currentMood = expr;
+    const ws = new WebSocket('ws://localhost:8080');
+    ws.onopen = () => console.log('Connected to Presage Node.js Server');
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'detections' && message.data) {
+          const sdkData = message.data;
+          let currentMood = 'neutral';
+          let maxProb = 0;
+          
+          if (sdkData.expressions) {
+            for (const [expr, prob] of Object.entries(sdkData.expressions)) {
+              if ((prob as number) > maxProb) {
+                maxProb = prob as number;
+                currentMood = expr;
+              }
             }
           }
+
+          const isBlinking = sdkData.eyeBlink || false;
+          const updatedMetrics = {
+            user_id: 'mock_user_123',
+            document_id: documentId || '',
+            focus: (currentMood === 'happiness' || currentMood === 'neutral') ? 90 : 40,
+            distraction: (currentMood === 'surprise' || currentMood === 'fear') ? 80 : 10,
+            struggling: (currentMood === 'anger' || currentMood === 'sadness') ? 85 : 0,
+            mood: currentMood,
+            mood_confidence: Math.floor(maxProb * 100) || 100,
+            tiredness: isBlinking ? 80 : 5,
+          };
+
+          setFocusMetrics(updatedMetrics);
+
+          if (updatedMetrics.struggling > 50) {
+            setAvatarEmotion('sad');
+          } else if (updatedMetrics.distraction > 50) {
+            setAvatarEmotion('angry');
+          } else {
+            setAvatarEmotion('neutral');
+          }
         }
-
-        const isBlinking = sdkData.eyeBlink || false;
-
-        updatedMetrics = {
-          user_id: 'mock_user_123',
-          document_id: documentId,
-          focus: (currentMood === 'happiness' || currentMood === 'neutral') ? 90 : 40,
-          distraction: (currentMood === 'surprise' || currentMood === 'fear') ? 80 : 10,
-          struggling: (currentMood === 'anger' || currentMood === 'sadness') ? 85 : 0,
-          mood: currentMood,
-          mood_confidence: Math.floor(maxProb * 100) || 100,
-          tiredness: isBlinking ? 80 : 5,
-        };
-      } else {
-        console.warn('PresageSDK not found. Add the SDK script to index.html.');
-        return;
+      } catch (err) {
+        console.error('Error parsing WS message:', err);
       }
+    };
+    ws.onclose = () => console.log('Disconnected from Presage Node.js Server');
+    wsRef.current = ws;
 
+    return () => {
+      ws.close();
+    };
+  }, [documentId]);
 
-      setFocusMetrics(updatedMetrics);
+  // Periodic Presage Tracking Loop (sends webcam frames to Node.js)
+  useEffect(() => {
+    if (!documentId || !cameraActive) return;
 
-      // Trigger Avatar expressions dynamically based on study state
-      if (updatedMetrics.struggling > 50) {
-        setAvatarEmotion('sad'); // Tutor looks concerned/sad for user
-      } else if (updatedMetrics.distraction > 50) {
-        setAvatarEmotion('angry'); // Tutor looks stern
-      } else {
-        setAvatarEmotion('neutral'); // Tutor looks happy/calm
+    const interval = setInterval(() => {
+      // Extract frame from video and send over WebSocket
+      if (wsRef.current?.readyState === WebSocket.OPEN && videoRef.current && canvasRef.current) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx && video.readyState === video.HAVE_ENOUGH_DATA) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const base64Image = canvas.toDataURL('image/jpeg', 0.5); // Compress quality to 50%
+          
+          wsRef.current.send(JSON.stringify({
+            type: 'frame',
+            image: base64Image
+          }));
+        }
       }
-
-      // Send to FastAPI focus endpoint in background
-      api.sendFocusEvent(updatedMetrics).catch((err) => console.error('Error posting focus metrics:', err));
+      
+      // Also send the latest focusMetrics state to the FastAPI backend
+      setFocusMetrics(prevMetrics => {
+         if (prevMetrics) {
+           api.sendFocusEvent(prevMetrics).catch((err) => console.error('Error posting focus metrics:', err));
+         }
+         return prevMetrics;
+      });
+      
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [documentId]);
+  }, [documentId, cameraActive]);
 
   // Handle camera toggle
   const toggleCamera = () => {
