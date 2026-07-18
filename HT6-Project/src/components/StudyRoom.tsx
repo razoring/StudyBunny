@@ -227,51 +227,69 @@ export const StudyRoom: React.FC = () => {
 
   // Periodic Presage Tracking Loop (sends focus metrics to backend)
   useEffect(() => {
-    if (!documentId) return;
+    if (!documentId || !cameraActive) return;
 
     const interval = setInterval(() => {
       // Get or generate metrics
       // Checks if global PresageSDK exists, otherwise fallbacks to mock simulator
       let updatedMetrics: FocusEvent;
 
-      if ((window as any).PresageSDK) {
-        if (!(window as any).PresageSDK.isInitialized) {
-          (window as any).PresageSDK.init({
-            apiKey: import.meta.env.VITE_PRESAGE,
-          });
-        }
-        
-        const sdkData = (window as any).PresageSDK.getLatestDetections() || {};
-        
-        // Parse Presage SmartSpectra SDK
-        let currentMood = 'neutral';
-        let maxProb = 0;
-        
-        if (sdkData.expressions) {
-          for (const [expr, prob] of Object.entries(sdkData.expressions)) {
-            if ((prob as number) > maxProb) {
-              maxProb = prob as number;
-              currentMood = expr;
+      if (!(window as any).PresageSDK) {
+        // Implement a SmartSpectra Simulator for web demo purposes
+        (window as any).PresageSDK = {
+          isInitialized: true,
+          getLatestDetections: () => {
+            const isBlinking = Math.random() > 0.85;
+            const state = Math.random();
+            let expressions = { neutral: 1.0 };
+            
+            if (state > 0.9) {
+              expressions = { anger: 0.95 };
+            } else if (state > 0.8) {
+              expressions = { sadness: 0.9 };
+            } else if (state > 0.7) {
+              expressions = { surprise: 0.85 };
+            } else if (state > 0.6) {
+              expressions = { happiness: 0.8 };
             }
+
+            return {
+              expressions: expressions,
+              eyeBlink: isBlinking,
+              talking: Math.random() > 0.7,
+            };
+          }
+        };
+        console.warn('PresageSDK not found. Initialized SmartSpectra Web Simulator.');
+      }
+
+      const sdkData = (window as any).PresageSDK.getLatestDetections() || {};
+        
+      // Parse Presage SmartSpectra SDK
+      let currentMood = 'neutral';
+      let maxProb = 0;
+      
+      if (sdkData.expressions) {
+        for (const [expr, prob] of Object.entries(sdkData.expressions)) {
+          if ((prob as number) > maxProb) {
+            maxProb = prob as number;
+            currentMood = expr;
           }
         }
-
-        const isBlinking = sdkData.eyeBlink || false;
-
-        updatedMetrics = {
-          user_id: 'mock_user_123',
-          document_id: documentId,
-          focus: (currentMood === 'happiness' || currentMood === 'neutral') ? 90 : 40,
-          distraction: (currentMood === 'surprise' || currentMood === 'fear') ? 80 : 10,
-          struggling: (currentMood === 'anger' || currentMood === 'sadness') ? 85 : 0,
-          mood: currentMood,
-          mood_confidence: Math.floor(maxProb * 100) || 100,
-          tiredness: isBlinking ? 80 : 5,
-        };
-      } else {
-        console.warn('PresageSDK not found. Add the SDK script to index.html.');
-        return;
       }
+
+      const isBlinking = sdkData.eyeBlink || false;
+
+      updatedMetrics = {
+        user_id: 'mock_user_123',
+        document_id: documentId,
+        focus: (currentMood === 'happiness' || currentMood === 'neutral') ? 90 : 40,
+        distraction: (currentMood === 'surprise' || currentMood === 'fear') ? 80 : 10,
+        struggling: (currentMood === 'anger' || currentMood === 'sadness') ? 85 : 0,
+        mood: currentMood,
+        mood_confidence: Math.floor(maxProb * 100) || 100,
+        tiredness: isBlinking ? 80 : 5,
+      };
 
 
       setFocusMetrics(updatedMetrics);
@@ -290,7 +308,7 @@ export const StudyRoom: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [documentId]);
+  }, [documentId, cameraActive]);
 
   // Handle camera toggle
   const toggleCamera = () => {
