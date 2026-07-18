@@ -5,7 +5,7 @@ from app.vector_store.chroma_client import query_chunks
 
 genai.configure(api_key=settings.gemini_api_key)
 
-GENERATION_MODEL = "gemini-2.5-flash"
+GENERATION_MODEL = "gemini-3.5-flash"
 
 ANSWER_PROMPT = """You are a helpful study avatar embedded in a study app. Answer the
 student's question using ONLY the context below. If the context doesn't contain the

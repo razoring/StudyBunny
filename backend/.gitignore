@@ -199,3 +199,4 @@ src/uploads/
 
 chroma_data
 backend/chroma_data
+test_rag.py
