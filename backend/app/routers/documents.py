@@ -87,3 +87,23 @@ async def get_document(document_id: str):
         status=doc["status"],
         created_at=doc["created_at"],
     )
+
+
+@router.get("", response_model=list[DocumentOut])
+async def list_documents(user_id: str | None = None):
+    query = {}
+    if user_id:
+        query["user_id"] = user_id
+    cursor = documents_collection().find(query).sort("created_at", -1)
+    docs = await cursor.to_list(length=100)
+    return [
+        DocumentOut(
+            id=d["_id"],
+            user_id=d["user_id"],
+            filename=d["filename"],
+            status=d["status"],
+            created_at=d["created_at"],
+        )
+        for d in docs
+    ]
+

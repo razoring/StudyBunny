@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&family=VT323&display=swap');
+
+:root {
+  /* Poisson-23 Palette Tokens */
+  --c-cream: #f7efc7;
+  --c-sand-light: #bbb094;
+  --c-sand-med: #807665;
+  --c-sand-dark: #595246;
+  --c-charcoal: #333333;
+  --c-dark-slate: #191f22;
+
+  --c-pine-dark: #2f4443;
+  --c-pine-med: #3b5e58;
+  --c-sage-dark: #5a8c6c;
+  --c-sage-light: #8bb48d;
+  --c-mint-pale: #c0d0a5;
+
+  --c-mint-bright: #a1cdb0;
+  --c-slate-blue: #709395;
+  --c-slate-dark: #4a787b;
+  --c-plum-dark: #383140;
+
+  --c-mauve: #734d5c;
+  --c-dusty-rose: #a76772;
+  --c-coral: #cc867d;
+  --c-peach: #e0ba8b;
+  --c-clay: #c38252;
+
+  --c-burnt-orange: #a1563c;
+  --c-red-brown: #6f342d;
+  --c-brown-dark: #44271f;
+
+  /* Aesthetic mappings */
+  --bg-primary: var(--c-cream);
+  --bg-panel: #fffbf0;
+  --bg-card: var(--c-mint-pale);
+  --border-color: var(--c-brown-dark);
+  --text-color: var(--c-dark-slate);
+  --color-accent: var(--c-clay);
+  --color-success: var(--c-sage-dark);
+
+  /* Fonts */
+  --font-cozy: 'Nunito', sans-serif;
+  --font-retro: 'VT323', monospace;
+
+  /* Borders & Shadows */
+  --border-thick: 4px solid var(--border-color);
+  --border-medium: 3px solid var(--border-color);
+  --border-thin: 2px solid var(--border-color);
+  --shadow-retro: 4px 4px 0px var(--border-color);
+  --shadow-retro-lg: 8px 8px 0px var(--border-color);
+  --radius-cozy: 16px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-cozy);
+  background-color: var(--bg-primary);
+  color: var(--text-color);
+  overflow-x: hidden;
+}
+
+/* Retro Pixel Art UI Utility Classes */
+.pixel-panel {
+  background-color: var(--bg-panel);
+  border: var(--border-thick);
+  border-radius: var(--radius-cozy);
+  box-shadow: var(--shadow-retro);
+  padding: 20px;
+}
+
+.pixel-button {
+  background-color: var(--c-peach);
+  color: var(--c-brown-dark);
+  border: var(--border-medium);
+  border-radius: 8px;
+  box-shadow: 2px 2px 0px var(--border-color);
+  font-family: var(--font-cozy);
+  font-weight: 800;
+  padding: 8px 16px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.pixel-button:hover {
+  background-color: var(--c-clay);
+  color: white;
+}
+
+.pixel-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px var(--border-color);
+}
+
+.pixel-title {
+  font-family: var(--font-retro);
+  font-size: 3rem;
+  letter-spacing: 1px;
+  color: var(--c-red-brown);
+  text-shadow: 2px 2px 0px var(--c-peach);
+}
+
+/* Custom Scrollbar for cozy aesthetic */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--c-cream);
+  border-left: var(--border-thin);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--c-sand-light);
+  border: var(--border-thin);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--c-sand-med);
+}

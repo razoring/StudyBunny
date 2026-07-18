@@ -7,9 +7,14 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     chroma_persist_dir: str = "./chroma_data"
     cors_origins: str = "http://localhost:3000"
+    eleven_labs: str = ""
+    presage: str = ""
+    auth0: str = ""
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()
+
