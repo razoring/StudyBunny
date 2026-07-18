@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { SkeletonUtils } from 'three-stdlib';
 import { api } from '../services/api';
 import type { ChatMessage, FocusEvent } from '../services/api';
 
@@ -12,7 +13,8 @@ interface BunnyProps {
 }
 
 const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
-  const { scene } = useGLTF('/bunny.glb?v=3');
+  const { scene } = useGLTF('/bunny.glb?v=8');
+  const clonedScene = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const modelRef = useRef<THREE.Group>(null);
 
   const earLBone = useRef<THREE.Bone | null>(null);
@@ -25,27 +27,31 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
   const armLBone = useRef<THREE.Bone | null>(null);
   const armRBone = useRef<THREE.Bone | null>(null);
   const torsoBone = useRef<THREE.Bone | null>(null);
-  const meshRef = useRef<THREE.SkinnedMesh | null>(null);
+  const meshRefs = useRef<THREE.SkinnedMesh[]>([]);
 
   useEffect(() => {
-    scene.traverse((obj) => {
-      if ((obj as THREE.Bone).isBone) {
-        if (obj.name.includes('Ear.L')) earLBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Ear.R')) earRBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Eye.L')) eyeLBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Eye.R')) eyeRBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Eyebrow.L')) eyebrowLBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Eyebrow.R')) eyebrowRBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Head')) headBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Arm.L')) armLBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Arm.R')) armRBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Torso')) torsoBone.current = obj as THREE.Bone;
-      }
-      if ((obj as THREE.SkinnedMesh).isSkinnedMesh) {
-        meshRef.current = obj as THREE.SkinnedMesh;
+    meshRefs.current = [];
+    clonedScene.traverse((obj) => {
+      const lowerName = (obj.name || '').toLowerCase();
+      
+      if (lowerName.includes('ear') && (lowerName.includes('l') || lowerName.includes('_l'))) earLBone.current = obj as THREE.Bone;
+      if (lowerName.includes('ear') && (lowerName.includes('r') || lowerName.includes('_r'))) earRBone.current = obj as THREE.Bone;
+      if (lowerName.includes('eye') && (lowerName.includes('l') || lowerName.includes('_l')) && !lowerName.includes('brow')) eyeLBone.current = obj as THREE.Bone;
+      if (lowerName.includes('eye') && (lowerName.includes('r') || lowerName.includes('_r')) && !lowerName.includes('brow')) eyeRBone.current = obj as THREE.Bone;
+      if (lowerName.includes('eyebrow') && (lowerName.includes('l') || lowerName.includes('_l'))) eyebrowLBone.current = obj as THREE.Bone;
+      if (lowerName.includes('eyebrow') && (lowerName.includes('r') || lowerName.includes('_r'))) eyebrowRBone.current = obj as THREE.Bone;
+      if (lowerName.includes('head')) headBone.current = obj as THREE.Bone;
+      if (lowerName.includes('arm') && (lowerName.includes('l') || lowerName.includes('_l'))) armLBone.current = obj as THREE.Bone;
+      if (lowerName.includes('arm') && (lowerName.includes('r') || lowerName.includes('_r'))) armRBone.current = obj as THREE.Bone;
+      if (lowerName.includes('torso')) torsoBone.current = obj as THREE.Bone;
+      
+      if ((obj as any).isMesh || (obj as any).isSkinnedMesh) {
+        if ((obj as any).morphTargetInfluences) {
+          meshRefs.current.push(obj as THREE.SkinnedMesh);
+        }
       }
     });
-  }, [scene]);
+  }, [clonedScene]);
 
   const blinkTimer = useRef(0);
   const blinkDuration = useRef(0.15);
@@ -62,19 +68,31 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
       blinkTimer.current = 0;
     }
 
-    if (isBlinking.current && meshRef.current?.morphTargetInfluences) {
-      const blinkIdx = meshRef.current.morphTargetDictionary?.['Blink'];
-      if (blinkIdx !== undefined) {
-        if (blinkTimer.current < blinkDuration.current) {
-          meshRef.current.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(meshRef.current.morphTargetInfluences[blinkIdx], 1, delta * 25);
-        } else if (blinkTimer.current < blinkDuration.current * 2) {
-          meshRef.current.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(meshRef.current.morphTargetInfluences[blinkIdx], 0, delta * 25);
-        } else {
-          meshRef.current.morphTargetInfluences[blinkIdx] = 0;
-          isBlinking.current = false;
-          blinkTimer.current = 0;
+    // Blinking
+    blinkTimer.current += delta;
+    if (!isBlinking.current && blinkTimer.current > 3 + Math.random() * 4) {
+      isBlinking.current = true;
+      blinkTimer.current = 0;
+    }
+
+    meshRefs.current.forEach((mesh) => {
+      if (isBlinking.current && mesh.morphTargetInfluences) {
+        const blinkIdx = mesh.morphTargetDictionary?.['Blink'];
+        if (blinkIdx !== undefined) {
+          if (blinkTimer.current < blinkDuration.current) {
+            mesh.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[blinkIdx], 1, delta * 25);
+          } else if (blinkTimer.current < blinkDuration.current * 2) {
+            mesh.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[blinkIdx], 0, delta * 25);
+          } else {
+            mesh.morphTargetInfluences[blinkIdx] = 0;
+          }
         }
       }
+    });
+
+    if (isBlinking.current && blinkTimer.current >= blinkDuration.current * 2) {
+      isBlinking.current = false;
+      blinkTimer.current = 0;
     }
 
     // Ear Twitching
@@ -120,28 +138,23 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
     if (armLBone.current) armLBone.current.rotation.z = Math.sin(t * 1.5) * 0.05;
     if (armRBone.current) armRBone.current.rotation.z = Math.sin(t * 1.5 + Math.PI) * 0.05;
 
-    // Eyebrow and Emotion Shapekeys
-    let targetEyebrowZ = 0;
-    if (emotion === 'angry') targetEyebrowZ = -0.2;
-    if (emotion === 'sad') targetEyebrowZ = 0.2;
+    // Emotion Shapekeys
+    meshRefs.current.forEach((mesh) => {
+      if (mesh.morphTargetInfluences) {
+        const angryIdx = mesh.morphTargetDictionary?.['Angry'];
+        const sadIdx = mesh.morphTargetDictionary?.['Sad'];
 
-    if (eyebrowLBone.current) eyebrowLBone.current.rotation.z = THREE.MathUtils.lerp(eyebrowLBone.current.rotation.z, targetEyebrowZ, delta * 5);
-    if (eyebrowRBone.current) eyebrowRBone.current.rotation.z = THREE.MathUtils.lerp(eyebrowRBone.current.rotation.z, -targetEyebrowZ, delta * 5);
-
-    if (meshRef.current?.morphTargetInfluences) {
-      const angryIdx = meshRef.current.morphTargetDictionary?.['Angry'];
-      const sadIdx = meshRef.current.morphTargetDictionary?.['Sad'];
-
-      if (angryIdx !== undefined) {
-        meshRef.current.morphTargetInfluences[angryIdx] = THREE.MathUtils.lerp(meshRef.current.morphTargetInfluences[angryIdx], emotion === 'angry' ? 1 : 0, delta * 8);
+        if (angryIdx !== undefined) {
+          mesh.morphTargetInfluences[angryIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[angryIdx], emotion === 'angry' ? 1 : 0, delta * 8);
+        }
+        if (sadIdx !== undefined) {
+          mesh.morphTargetInfluences[sadIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[sadIdx], emotion === 'sad' ? 1 : 0, delta * 8);
+        }
       }
-      if (sadIdx !== undefined) {
-        meshRef.current.morphTargetInfluences[sadIdx] = THREE.MathUtils.lerp(meshRef.current.morphTargetInfluences[sadIdx], emotion === 'sad' ? 1 : 0, delta * 8);
-      }
-    }
+    });
   });
 
-  return <primitive ref={modelRef} object={scene} position={[0, -45, 0]} scale={[12, 12, 12]} />;
+  return <primitive ref={modelRef} object={clonedScene} position={[0, -45, 0]} scale={[12, 12, 12]} />;
 };
 
 
@@ -222,32 +235,44 @@ export const StudyRoom: React.FC = () => {
       let updatedMetrics: FocusEvent;
 
       if ((window as any).PresageSDK) {
-        const sdkData = (window as any).PresageSDK.getLatestDetections();
+        if (!(window as any).PresageSDK.isInitialized) {
+          (window as any).PresageSDK.init({
+            apiKey: import.meta.env.VITE_PRESAGE,
+          });
+        }
+        
+        const sdkData = (window as any).PresageSDK.getLatestDetections() || {};
+        
+        // Parse Presage SmartSpectra SDK
+        let currentMood = 'neutral';
+        let maxProb = 0;
+        
+        if (sdkData.expressions) {
+          for (const [expr, prob] of Object.entries(sdkData.expressions)) {
+            if ((prob as number) > maxProb) {
+              maxProb = prob as number;
+              currentMood = expr;
+            }
+          }
+        }
+
+        const isBlinking = sdkData.eyeBlink || false;
+
         updatedMetrics = {
           user_id: 'mock_user_123',
           document_id: documentId,
-          focus: sdkData.focusScore || 90,
-          distraction: sdkData.distractionScore || 10,
-          struggling: sdkData.strugglingScore || 0,
-          mood: sdkData.mood || 'neutral',
-          mood_confidence: sdkData.moodConfidence || 95,
-          tiredness: sdkData.tirednessScore || 5,
+          focus: (currentMood === 'happiness' || currentMood === 'neutral') ? 90 : 40,
+          distraction: (currentMood === 'surprise' || currentMood === 'fear') ? 80 : 10,
+          struggling: (currentMood === 'anger' || currentMood === 'sadness') ? 85 : 0,
+          mood: currentMood,
+          mood_confidence: Math.floor(maxProb * 100) || 100,
+          tiredness: isBlinking ? 80 : 5,
         };
       } else {
-        // Mock simulation loop to make it interactive in local dev
-        const isStruggling = Math.random() > 0.85;
-        const isDistracted = Math.random() > 0.8;
-        updatedMetrics = {
-          user_id: 'mock_user_123',
-          document_id: documentId,
-          focus: Math.max(50, Math.floor(80 + Math.random() * 20 - (isDistracted ? 30 : 0))),
-          distraction: isDistracted ? Math.floor(40 + Math.random() * 30) : Math.floor(5 + Math.random() * 10),
-          struggling: isStruggling ? Math.floor(60 + Math.random() * 40) : 0,
-          mood: isStruggling ? 'frustrated' : isDistracted ? 'distracted' : 'neutral',
-          mood_confidence: Math.floor(85 + Math.random() * 15),
-          tiredness: Math.floor(5 + Math.random() * 15),
-        };
+        console.warn('PresageSDK not found. Add the SDK script to index.html.');
+        return;
       }
+
 
       setFocusMetrics(updatedMetrics);
 
