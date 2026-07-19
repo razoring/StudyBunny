@@ -28,9 +28,15 @@ def answer_question(question: str, document_id: str, n_results: int = 5) -> dict
 
     model = genai.GenerativeModel(GENERATION_MODEL)
     prompt = ANSWER_PROMPT.format(context=context, question=question)
-    response = model.generate_content(prompt)
+    
+    try:
+        response = model.generate_content(prompt)
+        reply = response.text.strip()
+    except Exception as e:
+        reply = "I'm a little tired right now and can't answer (API rate limit exceeded). Give me a few seconds!"
+        print(f"Gemini API Error: {e}")
 
     return {
-        "reply": response.text.strip(),
+        "reply": reply,
         "source_chunks": [c["id"] for c in chunks],
     }

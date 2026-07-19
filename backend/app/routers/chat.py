@@ -45,3 +45,30 @@ async def get_chat_history(document_id: str):
             m["created_at"] = m["created_at"].isoformat()
     return messages
 
+from pydantic import BaseModel
+from fastapi import Response
+import requests
+
+class TTSRequest(BaseModel):
+    text: str
+
+@router.post("/tts")
+def get_tts(req: TTSRequest):
+    from app.config import settings
+    # Rachel voice ID (default)
+    url = "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM"
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": settings.eleven_labs
+    }
+    data = {
+        "text": req.text
+    }
+    response = requests.post(url, json=data, headers=headers)
+    if response.status_code == 200:
+        return Response(content=response.content, media_type="audio/mpeg")
+    else:
+        print(f"ElevenLabs TTS Error: {response.status_code} - {response.text}")
+        return Response(status_code=response.status_code, content=response.text)
+

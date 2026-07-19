@@ -20,9 +20,10 @@ import QuestProgress from '../components/QuestBar';
 interface BunnyProps {
   emotion: 'neutral' | 'angry' | 'sad';
   triggerProjector?: boolean;
+  isThinking?: boolean;
 }
 
-const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector }) => {
+const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinking }) => {
   const { scene } = useGLTF('/bunny.glb?v=8');
   const clonedScene = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const modelRef = useRef<THREE.Group>(null);
@@ -90,16 +91,22 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector }) => {
     meshRefs.current.forEach((mesh) => {
       const blinkIdx = mesh.morphTargetDictionary?.['Blink'];
       if (blinkIdx !== undefined) {
+        const restingBlink = isThinking ? 0.3 : (emotion === 'neutral' ? -0.8 : 0);
+
         if (isBlinking.current) {
           if (blinkTimer.current < blinkDuration.current) {
             mesh.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[blinkIdx], 1.5, delta * 30);
           } else if (blinkTimer.current < blinkDuration.current * 2) {
-            mesh.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[blinkIdx], 0, delta * 30);
+            mesh.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[blinkIdx], restingBlink, delta * 30);
           } else {
-            mesh.morphTargetInfluences[blinkIdx] = 0;
+            mesh.morphTargetInfluences[blinkIdx] = restingBlink;
           }
         } else {
-          mesh.morphTargetInfluences[blinkIdx] = 0;
+          mesh.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(
+            mesh.morphTargetInfluences[blinkIdx],
+            restingBlink,
+            delta * 10
+          );
         }
       }
     });
@@ -152,15 +159,20 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector }) => {
     const lookY = Math.cos(t * 0.3) * 0.05;
 
     if (eyeLBone.current && eyeRBone.current) {
-      eyeLBone.current.rotation.x = lookX;
+      eyeLBone.current.rotation.x = -(Math.PI / 2) + lookX;
       eyeLBone.current.rotation.y = lookY;
-      eyeRBone.current.rotation.x = lookX;
+      eyeRBone.current.rotation.x = -(Math.PI / 2) + lookX;
       eyeRBone.current.rotation.y = lookY;
     }
 
     if (headBone.current) {
-      headBone.current.rotation.y = Math.sin(t * 0.4) * 0.03;
-      headBone.current.rotation.z = Math.cos(t * 0.6) * 0.02;
+      if (isThinking) {
+        headBone.current.rotation.y = THREE.MathUtils.lerp(headBone.current.rotation.y, 0.2 + Math.sin(t * 0.4) * 0.03, delta * 5);
+        headBone.current.rotation.z = THREE.MathUtils.lerp(headBone.current.rotation.z, Math.PI / 8 + Math.cos(t * 0.6) * 0.02, delta * 5);
+      } else {
+        headBone.current.rotation.y = THREE.MathUtils.lerp(headBone.current.rotation.y, Math.sin(t * 0.4) * 0.03, delta * 5);
+        headBone.current.rotation.z = THREE.MathUtils.lerp(headBone.current.rotation.z, Math.cos(t * 0.6) * 0.02, delta * 5);
+      }
     }
 
     const idleArmPosX = 1.2;
@@ -444,9 +456,11 @@ export const StudyRoom: React.FC = () => {
 
   // Webcam stream & controls
   const videoRef = useRef<HTMLVideoElement>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState(true);
   const [micActive, setMicActive] = useState(true);
+  const [ttsActive, setTtsActive] = useState(true);
 
   // Presage SDK tracking metrics
   const [focusMetrics, setFocusMetrics] = useState<FocusEvent>({
@@ -475,30 +489,50 @@ export const StudyRoom: React.FC = () => {
     presage: 'OK'
   });
 
-  // Poll backend health
+  const [maxProjectorChars, setMaxProjectorChars] = useState(200);
+
+  // Hidden testing logic to find character limit that reaches middle height
   useEffect(() => {
-    const fetchHealth = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/health');
-        if (response.ok) {
-          const data = await response.json();
-          setServiceHealth(prev => ({
-            ...prev,
-            mongodb: data.services.mongodb || 'FAIL',
-            gemini: data.services.gemini || 'FAIL',
-            eleven_labs: data.services.eleven_labs || 'FAIL',
-            auth0: data.services.auth0 || 'FAIL'
-          }));
-        } else {
-          setServiceHealth(prev => ({ ...prev, mongodb: 'FAIL', gemini: 'FAIL', eleven_labs: 'FAIL', auth0: 'FAIL' }));
-        }
-      } catch (err) {
-        setServiceHealth(prev => ({ ...prev, mongodb: 'FAIL', gemini: 'FAIL', eleven_labs: 'FAIL', auth0: 'FAIL' }));
+    const determineMaxChars = () => {
+      const container = document.getElementById('avatar-container');
+      if (!container) return;
+
+      const div = document.createElement('div');
+      div.style.position = 'absolute';
+      div.style.visibility = 'hidden';
+      div.style.bottom = '20px';
+      div.style.left = '20px';
+      div.style.right = '20px';
+      div.style.padding = '16px 20px';
+      div.style.fontFamily = 'var(--font-retro)';
+      div.style.fontSize = '1.2rem';
+      div.style.lineHeight = '1.5';
+      div.style.border = '4px solid black';
+      div.style.zIndex = '-100';
+
+      container.appendChild(div);
+
+      const targetHeight = container.clientHeight / 2;
+      let testText = '';
+      const sampleChunk = 'A '.repeat(5); // 10 chars per chunk
+
+      while (div.clientHeight < targetHeight && testText.length < 2000) {
+        testText += sampleChunk;
+        div.innerText = testText;
       }
+
+      // Give a little buffer (subtracting a chunk)
+      setMaxProjectorChars(Math.max(50, testText.length - 10));
+      container.removeChild(div);
     };
-    fetchHealth();
-    const interval = setInterval(fetchHealth, 10000);
-    return () => clearInterval(interval);
+
+    const timer = setTimeout(determineMaxChars, 500); // Give styles time to paint
+    window.addEventListener('resize', determineMaxChars);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', determineMaxChars);
+    };
   }, []);
 
   // Load chat history & initialize webcam on component mount
@@ -547,14 +581,12 @@ export const StudyRoom: React.FC = () => {
     const ws = new WebSocket('ws://localhost:8080');
     ws.onopen = () => {
       console.log('Connected to Presage Node.js Server');
-      setServiceHealth(prev => ({ ...prev, presage: 'OK' }));
     };
     ws.onclose = () => {
       console.log('Disconnected from Presage Node.js Server');
-      setServiceHealth(prev => ({ ...prev, presage: 'FAIL' }));
     };
     ws.onerror = () => {
-      setServiceHealth(prev => ({ ...prev, presage: 'FAIL' }));
+      console.error('Presage WebSocket Error');
     };
     ws.onmessage = (event) => {
       try {
@@ -695,16 +727,26 @@ export const StudyRoom: React.FC = () => {
       };
       setMessages((prev) => [...prev, avatarMsg]);
 
-      // Mock ElevenLabs speech output using browser speech synthesis
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(response.reply);
-        // Select a cozy/pleasant voice if available
-        const voices = window.speechSynthesis.getVoices();
-        const selectedVoice = voices.find((v) => v.name.includes('Google') || v.lang.startsWith('en'));
-        if (selectedVoice) utterance.voice = selectedVoice;
-        utterance.pitch = 1.1; // Make it sound a bit more cartoony
-        utterance.rate = 1.0;
-        window.speechSynthesis.speak(utterance);
+      // ElevenLabs speech output via backend proxy
+      if (ttsActive) {
+        try {
+          const ttsRes = await fetch('http://localhost:8000/chat/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: response.reply })
+          });
+          if (ttsRes.ok) {
+            const blob = await ttsRes.blob();
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            currentAudioRef.current = audio;
+            audio.play().catch(err => console.error("Audio playback blocked/failed:", err));
+          } else {
+            console.error("TTS fetch failed with status:", ttsRes.status);
+          }
+        } catch (err) {
+          console.error("TTS fetch failed", err);
+        }
       }
     } catch (err) {
       console.error('Chat query failed:', err);
@@ -781,12 +823,34 @@ export const StudyRoom: React.FC = () => {
 
           {/* 3D Bunny Avatar Box */}
           <div className="pixel-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <h3 style={{ fontFamily: 'var(--font-retro)', fontSize: '1.5rem', marginBottom: '8px', color: 'var(--c-red-brown)' }}>
-              Study Buddy (Tutor)
-            </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h3 style={{ fontFamily: 'var(--font-retro)', fontSize: '1.5rem', color: 'var(--c-red-brown)', margin: 0 }}>
+                Easter
+              </h3>
+              <button
+                className="pixel-button"
+                onClick={() => {
+                  setTtsActive(prev => {
+                    const nextState = !prev;
+                    if (!nextState) {
+                      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                      if (currentAudioRef.current) {
+                        currentAudioRef.current.pause();
+                        currentAudioRef.current.currentTime = 0;
+                      }
+                    }
+                    return nextState;
+                  });
+                }}
+                style={{ padding: '4px 12px', fontSize: '0.9rem', backgroundColor: ttsActive ? 'var(--c-peach)' : 'var(--c-coral)', height: 'auto', minHeight: '30px' }}
+              >
+                {ttsActive ? '🔊 TTS On' : '🔇 TTS Off'}
+              </button>
+            </div>
 
             {/* The Low-Res Retro Pixelated WebGL Container */}
             <div
+              id="avatar-container"
               style={{
                 flex: 1,
                 backgroundImage: 'url(/board.jpg)',
@@ -815,7 +879,8 @@ export const StudyRoom: React.FC = () => {
                   <Suspense fallback={<AvatarLoader />}>
                     <BunnyModel
                       emotion={avatarEmotion}
-                      triggerProjector={showDebug || (sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' && messages[messages.length - 1].text.length > 200)}
+                      triggerProjector={showDebug || (sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' && messages[messages.length - 1].text.length > maxProjectorChars)}
+                      isThinking={sendingMsg}
                     />
                   </Suspense>
                 </Canvas>
@@ -903,10 +968,15 @@ export const StudyRoom: React.FC = () => {
                     </div>
                   </div>
                 </StreamingBubble>
+              ) : sendingMsg ? (
+                <StreamingBubble
+                  text="Thinking..."
+                  isProjector={false}
+                />
               ) : (
                 <StreamingBubble
                   text={sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' ? messages[messages.length - 1].text : undefined}
-                  isProjector={sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' && messages[messages.length - 1].text.length > 200}
+                  isProjector={sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' && messages[messages.length - 1].text.length > maxProjectorChars}
                 />
               )}
 
