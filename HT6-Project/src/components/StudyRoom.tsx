@@ -696,12 +696,8 @@ export const StudyRoom: React.FC = () => {
 
         if (ctx && video.readyState === video.HAVE_ENOUGH_DATA) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const base64Image = canvas.toDataURL('image/jpeg', 0.5); // Compress quality to 50%
-
-          wsRef.current.send(JSON.stringify({
-            type: 'frame',
-            image: base64Image
-          }));
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          wsRef.current.send(imageData.data.buffer);
         }
       }
 
