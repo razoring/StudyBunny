@@ -104,8 +104,8 @@ body {
   font-family: var(--font-retro);
   font-size: 3rem;
   letter-spacing: 1px;
-  color: var(--c-red-brown);
-  text-shadow: 2px 2px 0px var(--c-peach);
+  color: white;
+  text-shadow: 2px 2px 0px #383140;
 }
 
 .auth-scene {
