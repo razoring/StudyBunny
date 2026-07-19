@@ -1,15 +1,21 @@
 const WebSocket = require('ws');
 require('dotenv').config({ path: '../../backend/.env' });
 
-const { SmartSpectraSDK, PixelFormat, decodeMetrics } = require('@smartspectra/node-sdk');
+const { SmartSpectraSDK, PixelFormat, faceMetrics, setMetricsClass, decodeMetrics } = require('@smartspectra/node-sdk');
+const { Metrics } = require('@smartspectra/node-sdk/messages');
 
 const PORT = 8080;
 const wss = new WebSocket.Server({ port: PORT });
 console.log(`Presage SmartSpectra WebSocket server started on ws://localhost:${PORT}`);
 
+setMetricsClass(Metrics);
+
 let sdk = null;
 try {
-    sdk = new SmartSpectraSDK({ apiKey: process.env.PRESAGE });
+    sdk = new SmartSpectraSDK({ 
+        apiKey: process.env.PRESAGE,
+        requestedMetrics: faceMetrics
+    });
     sdk.useCustomInput();
     
     sdk.on('metrics', (buf) => {
@@ -17,10 +23,36 @@ try {
             const data = decodeMetrics(buf);
             let formatted = null;
             if (data && data.face) {
+                // The SDK returns arrays of measurements (e.g. data.face.blinking, data.face.expression)
+                // We'll extract the latest value if available.
+                const lastExpr = data.face.expression?.length ? data.face.expression[data.face.expression.length - 1] : null;
+                const lastBlink = data.face.blinking?.length ? data.face.blinking[data.face.blinking.length - 1] : null;
+                const lastTalk = data.face.talking?.length ? data.face.talking[data.face.talking.length - 1] : null;
+
+                // Build expressions dictionary based on whatever the protobuf returns
+                let expressions = { neutral: 1.0 };
+                if (lastExpr && lastExpr.scores) {
+                    expressions = {
+                        neutral: 0, happiness: 0, sadness: 0, anger: 0,
+                        surprise: 0, fear: 0, disgust: 0
+                    };
+                    lastExpr.scores.forEach(score => {
+                        switch(score.type) {
+                            case 1: expressions.anger = score.confidence; break;
+                            case 3: expressions.disgust = score.confidence; break;
+                            case 4: expressions.fear = score.confidence; break;
+                            case 5: expressions.happiness = score.confidence; break;
+                            case 6: expressions.neutral = score.confidence; break;
+                            case 7: expressions.sadness = score.confidence; break;
+                            case 8: expressions.surprise = score.confidence; break;
+                        }
+                    });
+                }
+
                 formatted = {
-                    expressions: data.face.expressions || {},
-                    eyeBlink: !!data.face.isBlinking,
-                    talking: !!data.face.isTalking
+                    expressions: expressions,
+                    eyeBlink: lastBlink ? !!lastBlink.value : false,
+                    talking: lastTalk ? !!lastTalk.value : false
                 };
             }
             if (formatted) {

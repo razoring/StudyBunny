@@ -1,0 +1,6 @@
+@echo off
+echo Killing all related Node.js processes...
+taskkill /F /IM node.exe /T 2>nul
+echo Killing all related Python processes...
+taskkill /F /IM python.exe /T 2>nul
+echo Done!
