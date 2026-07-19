@@ -5,7 +5,7 @@ from app.models.schemas import Chunk
 
 genai.configure(api_key=settings.gemini_api_key)
 
-GENERATION_MODEL = "gemini-3.5-flash"
+GENERATION_MODEL = "gemini-3.1-flash-lite"
 
 SEGMENTATION_PROMPT = """You are helping a student turn a document into a study plan.
 
