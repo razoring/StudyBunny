@@ -156,161 +156,161 @@ export const HomeScreen: React.FC = () => {
     }}>
       <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '40px 20px', position: 'relative' }}>
         <header style={{ textAlign: 'center', marginBottom: '40px', position: 'relative' }}>
-        <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
-          <button
-            className="pixel-button"
-            onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-            style={{ padding: '8px 16px', fontSize: '0.9rem' }}
-          >
-            Logout
-          </button>
-        </div>
-        <h1 className="pixel-title">StudyBunny</h1>
-      </header>
+          <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+            <button
+              className="pixel-button"
+              onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+              style={{ padding: '8px 16px', fontSize: '0.9rem' }}
+            >
+              Logout
+            </button>
+          </div>
+          <h1 className="pixel-title">StudyBunny</h1>
+        </header>
 
-      <div style={{ width: '100%', position: 'relative' }}>
-        {/* Upload Zone */}
-        <div className="pixel-panel" style={{ display: 'flex', flexDirection: 'column', marginBottom: '30px', position: 'relative' }}>
-          <WalkingSprite />
-          <h2 style={{ fontFamily: 'var(--font-retro)', fontSize: '2.2rem', marginBottom: '15px', color: 'var(--c-red-brown)', zIndex: 11, position: 'relative' }}>
-            Start New Session
-          </h2>
-          <p style={{ marginBottom: '20px', color: 'var(--c-sand-dark)' }}>
-            Upload a PDF, TXT or markdown course document. We will analyze it to set up your study assistant context.
-          </p>
+        <div style={{ width: '100%', position: 'relative' }}>
+          {/* Upload Zone */}
+          <div className="pixel-panel" style={{ display: 'flex', flexDirection: 'column', marginBottom: '30px', position: 'relative' }}>
+            <WalkingSprite />
+            <h2 style={{ fontFamily: 'var(--font-retro)', fontSize: '2.2rem', marginBottom: '15px', color: 'var(--c-red-brown)', zIndex: 11, position: 'relative' }}>
+              Start New Session
+            </h2>
+            <p style={{ marginBottom: '20px', color: 'var(--c-sand-dark)' }}>
+              Upload a PDF, TXT or markdown course document. We will analyze it to set up your study assistant context.
+            </p>
 
-          <label
-            onDragEnter={handleDrag}
-            onDragOver={handleDrag}
-            onDragLeave={handleDrag}
-            onDrop={handleDrop}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '3px dashed var(--c-sand-med)',
-              borderRadius: '12px',
-              padding: '40px 20px',
-              cursor: 'pointer',
-              backgroundColor: dragActive ? 'var(--c-mint-bright)' : 'var(--bg-panel)',
-              transition: 'background-color 0.2s ease',
-              textAlign: 'center',
-            }}
-          >
-            <input type="file" onChange={handleFileInput} style={{ display: 'none' }} accept=".pdf,.txt,.md" />
-            {/* <div style={{ fontSize: '3rem', marginBottom: '10px' }}>📁</div> */}
-            <img
-              src={folderIconPNG}
-              alt="Upload folder"
-              style={{ width: '3rem', height: '3rem', marginBottom: '10px' }}
-            />
-            {uploading ? (
-              <span style={{ fontWeight: 800, color: 'var(--c-clay)' }}>Uploading document...</span>
-            ) : (
-              <>
-                <span style={{ fontWeight: 800, color: 'var(--c-brown-dark)' }}>
-                  Drag & drop your file here
-                </span>
-                <span style={{ fontSize: '0.9rem', color: 'var(--c-sand-med)', marginTop: '5px' }}>
-                  or click to browse from files
-                </span>
-              </>
-            )}
-          </label>
-        </div>
-
-        {/* History — collapsed to one card per session, grouped by completion */}
-        <div>
-          <h2 style={{ fontFamily: 'var(--font-retro)', fontSize: '2.2rem', marginBottom: '15px', color: 'var(--c-red-brown)' }}>
-            Study History
-          </h2>
-
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '20px', color: 'var(--c-sand-med)' }}>
-              Loading previous sessions...
-            </div>
-          ) : sessions.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--c-sand-med)' }}>
-              No study sessions found. Start a new one!
-            </div>
-          ) : (
-            (() => {
-              const readySessions = sessions.filter((s) => s.status === 'ready');
-              // This filters out both 'ready' AND 'failed' sessions, showing only 'processing' cards:
-              const otherSessions = sessions.filter((s) => s.status !== 'ready' && s.status !== 'failed');
-
-              const completed = readySessions.filter((s) => {
-                const quests = sessionQuests[s.id] || [];
-                return quests.length > 0 && quests.every((q) => q.status === 'done');
-              });
-              const inProgress = readySessions.filter((s) => !completed.includes(s));
-
-              return (
+            <label
+              onDragEnter={handleDrag}
+              onDragOver={handleDrag}
+              onDragLeave={handleDrag}
+              onDrop={handleDrop}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '3px dashed var(--c-sand-med)',
+                borderRadius: '12px',
+                padding: '40px 20px',
+                cursor: 'pointer',
+                backgroundColor: dragActive ? 'var(--c-mint-bright)' : 'var(--bg-panel)',
+                transition: 'background-color 0.2s ease',
+                textAlign: 'center',
+              }}
+            >
+              <input type="file" onChange={handleFileInput} style={{ display: 'none' }} accept=".pdf,.txt,.md" />
+              {/* <div style={{ fontSize: '3rem', marginBottom: '10px' }}>📁</div> */}
+              <img
+                src={folderIconPNG}
+                alt="Upload folder"
+                style={{ width: '3rem', height: '3rem', marginBottom: '10px' }}
+              />
+              {uploading ? (
+                <span style={{ fontWeight: 800, color: 'var(--c-clay)' }}>Uploading document...</span>
+              ) : (
                 <>
-                  {/* Processing / failed sessions, kept simple */}
-                  {otherSessions.length > 0 && (
-                    <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {otherSessions.map((session) => (
-                        <div
-                          key={session.id}
-                          className="pixel-panel"
-                          style={{
-                            padding: '14px 18px',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontWeight: 800, color: 'var(--c-brown-dark)' }}>{session.filename}</div>
-                            <div style={{ fontSize: '0.78rem', color: 'var(--c-sand-dark)' }}>
-                              {new Date(session.created_at).toLocaleDateString()}
-                            </div>
-                          </div>
-                          <span
+                  <span style={{ fontWeight: 800, color: 'var(--c-brown-dark)' }}>
+                    Drag & drop your file here
+                  </span>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--c-sand-med)', marginTop: '5px' }}>
+                    or click to browse from files
+                  </span>
+                </>
+              )}
+            </label>
+          </div>
+
+          {/* History — collapsed to one card per session, grouped by completion */}
+          <div>
+            <h2 style={{ fontFamily: 'var(--font-retro)', fontSize: '2.2rem', marginBottom: '15px', color: 'var(--c-red-brown)' }}>
+              Study History
+            </h2>
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: 'var(--c-sand-med)' }}>
+                Loading previous sessions...
+              </div>
+            ) : sessions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--c-sand-med)' }}>
+                No study sessions found. Start a new one!
+              </div>
+            ) : (
+              (() => {
+                const readySessions = sessions.filter((s) => s.status === 'ready');
+                // This filters out both 'ready' AND 'failed' sessions, showing only 'processing' cards:
+                const otherSessions = sessions.filter((s) => s.status !== 'ready' && s.status !== 'failed');
+
+                const completed = readySessions.filter((s) => {
+                  const quests = sessionQuests[s.id] || [];
+                  return quests.length > 0 && quests.every((q) => q.status === 'done');
+                });
+                const inProgress = readySessions.filter((s) => !completed.includes(s));
+
+                return (
+                  <>
+                    {/* Processing / failed sessions, kept simple */}
+                    {otherSessions.length > 0 && (
+                      <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {otherSessions.map((session) => (
+                          <div
+                            key={session.id}
+                            className="pixel-panel"
                             style={{
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              fontSize: '0.8rem',
-                              fontWeight: 800,
-                              backgroundColor: session.status === 'failed' ? 'var(--c-coral)' : 'var(--c-peach)',
-                              color: 'var(--c-brown-dark)',
-                              border: '1.5px solid var(--border-color)',
+                              padding: '14px 18px',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
                             }}
                           >
-                            {session.status.toUpperCase()}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                            <div>
+                              <div style={{ fontWeight: 800, color: 'var(--c-brown-dark)' }}>{session.filename}</div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--c-sand-dark)' }}>
+                                {new Date(session.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                fontWeight: 800,
+                                backgroundColor: session.status === 'failed' ? 'var(--c-coral)' : 'var(--c-peach)',
+                                color: 'var(--c-brown-dark)',
+                                border: '1.5px solid var(--border-color)',
+                              }}
+                            >
+                              {session.status.toUpperCase()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
-                  {/* Two-column grouping */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                    <SessionColumn
-                      dotColor="var(--c-clay)"
-                      label="In Progress"
-                      sessions={inProgress}
-                      sessionQuests={sessionQuests}
-                      buttonLabel="Continue"
-                      onOpen={(id) => navigate(`/study/${id}`)}
-                    />
-                    <SessionColumn
-                      dotColor="var(--c-sage-dark)"
-                      label="Completed"
-                      sessions={completed}
-                      sessionQuests={sessionQuests}
-                      buttonLabel="Review"
-                      onOpen={(id) => navigate(`/study/${id}`)}
-                    />
-                  </div>
-                </>
-              );
-            })()
-          )}
+                    {/* Two-column grouping */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                      <SessionColumn
+                        dotColor="var(--c-clay)"
+                        label="In Progress"
+                        sessions={inProgress}
+                        sessionQuests={sessionQuests}
+                        buttonLabel="Continue"
+                        onOpen={(id) => navigate(`/study/${id}`)}
+                      />
+                      <SessionColumn
+                        dotColor="var(--c-sage-dark)"
+                        label="Completed"
+                        sessions={completed}
+                        sessionQuests={sessionQuests}
+                        buttonLabel="Review"
+                        onOpen={(id) => navigate(`/study/${id}`)}
+                      />
+                    </div>
+                  </>
+                );
+              })()
+            )}
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );
