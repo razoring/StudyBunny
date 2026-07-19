@@ -109,15 +109,15 @@ body {
 }
 
 .auth-scene {
-  min-height: 100vh;
+  height: 100vh;      /* was min-height: 100vh */
   position: relative;
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: #a9d0b3;
+  background: rgba(244, 232, 180, 0.96);
 }
 
-.auth-scene::before {
+/* .auth-scene::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -125,18 +125,18 @@ body {
     linear-gradient(to bottom, rgba(244, 232, 180, 0.96) 0 10%, transparent 10% 100%),
     linear-gradient(to bottom, transparent 0 84%, rgba(96, 147, 107, 0.98) 84% 100%);
   pointer-events: none;
-}
+} */
 
 .auth-clouds,
 .auth-border,
-.auth-grass {
+/* .auth-grass {
   position: absolute;
   left: 0;
   width: 100%;
   pointer-events: none;
-}
+} */
 
-.auth-clouds {
+/* .auth-clouds {
   top: 0;
   height: 10rem;
   background:
@@ -153,44 +153,45 @@ body {
     radial-gradient(circle at 79% 2.7rem, #f3e7bc 0 2.7rem, transparent 2.76rem),
     radial-gradient(circle at 87% 1.8rem, #f3e7bc 0 4rem, transparent 4.06rem),
     radial-gradient(circle at 95% 2.7rem, #f3e7bc 0 2.8rem, transparent 2.86rem);
-}
+} */
 
-.auth-grass-top {
+/* .auth-grass-top {
   top: 9rem;
   height: 1rem;
   background: repeating-linear-gradient(90deg, #2f514c 0 0.35rem, transparent 0.35rem 1rem);
   opacity: 0.95;
-}
+} */
 
-.auth-grass-bottom {
+/* .auth-grass-bottom {
   bottom: 0;
   height: 6.2rem;
   background: repeating-linear-gradient(90deg, #2d4f4a 0 0.35rem, transparent 0.35rem 1rem), #688f72;
   border-top: 0.35rem solid #274640;
-}
+} */
 
-.auth-border-top {
+/* .auth-border-top {
   top: 0;
   height: 0.8rem;
   background: linear-gradient(180deg, #efe2b2 0, #d7c48d 100%);
-}
+} */
 
-.auth-border-bottom {
+/* .auth-border-bottom {
   bottom: 6.2rem;
   height: 0.8rem;
   background: linear-gradient(180deg, #274640 0, #355953 100%);
-}
+} */
 
 .auth-card {
   position: relative;
   z-index: 1;
-  width: min(470px, calc(100vw - 2rem));
+  width: 1000px;
+  height: 500px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1rem;
-  padding: 3.2rem 2rem 2rem;
-  margin-top: 3rem;
+  padding: 1.5rem 2rem;   /* reduced from 3.2rem 2rem 2rem */
+  margin-top: 0;          /* removed the extra 3rem push */
 }
 
 .auth-title {
@@ -235,7 +236,7 @@ body {
 .auth-button {
   align-self: center;
   margin-top: 1.8rem;
-  width: min(15rem, 100%);
+  width: 320px;
   height: 4rem;
   border: 0.35rem solid #76515f;
   border-radius: 0.75rem;
@@ -246,6 +247,9 @@ body {
   font-size: 2.8rem;
   line-height: 1;
   cursor: pointer;
+  margin-top: 100px;
+  align-items: center;
+  justify-content: center;
 }
 
 .auth-button:hover {
@@ -268,7 +272,7 @@ body {
   margin-top: 0.35rem;
 }
 
-/* Custom Scrollbar for cozy aesthetic */
+/* Custom Scrollbar for cozy aesthetic
 ::-webkit-scrollbar {
   width: 10px;
 }
@@ -283,4 +287,4 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--c-sand-med);
-}
+} */
