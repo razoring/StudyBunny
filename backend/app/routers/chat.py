@@ -1,7 +1,9 @@
 import uuid
+import re
+import json
 from datetime import datetime, timezone
 from fastapi import APIRouter
-from app.db.mongo import chat_messages_collection
+from app.db.mongo import chat_messages_collection, quests_collection
 from app.models.schemas import ChatRequest, ChatResponse
 from app.services.rag_service import answer_question
 
@@ -29,17 +31,52 @@ async def chat(req: ChatRequest):
 
     result = answer_question(req.message, document_id=req.document_id, history_text=history_text)
 
+    reply_text = result["reply"]
+    
+    # Check for quest update commands from the LLM
+    match = re.search(r"<UPDATE_QUESTS>(.*?)</UPDATE_QUESTS>", reply_text, re.DOTALL)
+    if match:
+        try:
+            quests_json = json.loads(match.group(1))
+            # Remove the tag from the final spoken text
+            reply_text = reply_text[:match.start()] + reply_text[match.end():]
+            reply_text = reply_text.strip()
+            
+            for q_action in quests_json:
+                action = q_action.get("action", "")
+                if action == "add":
+                    # Find highest order
+                    max_q = await quests_collection().find_one({"document_id": req.document_id}, sort=[("order", -1)])
+                    next_order = max_q["order"] + 1 if max_q else 1
+                    
+                    await quests_collection().insert_one({
+                        "_id": uuid.uuid4().hex,
+                        "document_id": req.document_id,
+                        "user_id": req.user_id,
+                        "title": q_action.get("title", "New Task"),
+                        "summary": q_action.get("summary", ""),
+                        "order": next_order,
+                        "status": "locked"
+                    })
+                elif action == "delete":
+                    await quests_collection().delete_one({
+                        "document_id": req.document_id, 
+                        "title": q_action.get("title")
+                    })
+        except Exception as e:
+            print(f"Failed to parse LLM quest update: {e}")
+
     # Log the avatar's reply
     await chat_messages_collection().insert_one({
         "_id": uuid.uuid4().hex,
         "quest_id": req.quest_id,
         "document_id": req.document_id,
         "role": "avatar",
-        "text": result["reply"],
+        "text": reply_text,
         "created_at": datetime.now(timezone.utc),
     })
 
-    return ChatResponse(reply=result["reply"], source_chunks=result["source_chunks"])
+    return ChatResponse(reply=reply_text, source_chunks=result["source_chunks"])
 
 
 @router.get("/history/{document_id}")
