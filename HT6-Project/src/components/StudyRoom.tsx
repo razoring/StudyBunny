@@ -19,9 +19,10 @@ import QuestProgress from '../components/QuestBar';
 // --- 3D Avatar Subcomponent ---
 interface BunnyProps {
   emotion: 'neutral' | 'angry' | 'sad';
+  triggerProjector?: boolean;
 }
 
-const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
+const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector }) => {
   const { scene } = useGLTF('/bunny.glb?v=8');
   const clonedScene = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const modelRef = useRef<THREE.Group>(null);
@@ -37,12 +38,21 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
   const armRBone = useRef<THREE.Bone | null>(null);
   const torsoBone = useRef<THREE.Bone | null>(null);
   const meshRefs = useRef<THREE.SkinnedMesh[]>([]);
+  const jumpState = useRef<'idle' | 'jumping'>('idle');
+  const jumpStartTime = useRef(0);
+
+  useEffect(() => {
+    if (triggerProjector) {
+      jumpState.current = 'jumping';
+      jumpStartTime.current = 0;
+    }
+  }, [triggerProjector]);
 
   useEffect(() => {
     meshRefs.current = [];
     clonedScene.traverse((obj) => {
       const lowerName = (obj.name || '').toLowerCase();
-      
+
       if (lowerName.includes('ear') && (lowerName.includes('l') || lowerName.includes('_l'))) earLBone.current = obj as THREE.Bone;
       if (lowerName.includes('ear') && (lowerName.includes('r') || lowerName.includes('_r'))) earRBone.current = obj as THREE.Bone;
       if (lowerName.includes('eye') && (lowerName.includes('l') || lowerName.includes('_l')) && !lowerName.includes('brow')) eyeLBone.current = obj as THREE.Bone;
@@ -53,7 +63,7 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
       if (lowerName.includes('arm') && (lowerName.includes('l') || lowerName.includes('_l'))) armLBone.current = obj as THREE.Bone;
       if (lowerName.includes('arm') && (lowerName.includes('r') || lowerName.includes('_r'))) armRBone.current = obj as THREE.Bone;
       if (lowerName.includes('torso')) torsoBone.current = obj as THREE.Bone;
-      
+
       if ((obj as any).isMesh || (obj as any).isSkinnedMesh) {
         if ((obj as any).morphTargetInfluences) {
           meshRefs.current.push(obj as THREE.SkinnedMesh);
@@ -114,22 +124,22 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
       const bones = [];
       if (earTwitchSide.current === 'L' || earTwitchSide.current === 'BOTH') bones.push(earLBone.current);
       if (earTwitchSide.current === 'R' || earTwitchSide.current === 'BOTH') bones.push(earRBone.current);
-      
+
       if (earTwitchTimer.current < 0.3) {
         // Soft, single twitch pulse
         const rotation = Math.sin(earTwitchTimer.current * 10) * 0.1;
-        bones.forEach(bone => { 
+        bones.forEach(bone => {
           if (bone) {
             bone.rotation.x = 0;
             bone.rotation.z = rotation;
-          } 
+          }
         });
       } else {
-        bones.forEach(bone => { 
+        bones.forEach(bone => {
           if (bone) {
             bone.rotation.x = 0;
             bone.rotation.z = 0;
-          } 
+          }
         });
         isEarTwitching.current = false;
         earTwitchTimer.current = 0;
@@ -140,21 +150,73 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
     const t = state.clock.getElapsedTime();
     const lookX = Math.sin(t * 0.5) * 0.05;
     const lookY = Math.cos(t * 0.3) * 0.05;
-    
+
     if (eyeLBone.current && eyeRBone.current) {
       eyeLBone.current.rotation.x = lookX;
       eyeLBone.current.rotation.y = lookY;
       eyeRBone.current.rotation.x = lookX;
       eyeRBone.current.rotation.y = lookY;
     }
-    
+
     if (headBone.current) {
       headBone.current.rotation.y = Math.sin(t * 0.4) * 0.03;
       headBone.current.rotation.z = Math.cos(t * 0.6) * 0.02;
     }
 
-    // Body idle movement
-    if (torsoBone.current) torsoBone.current.scale.y = 1 + Math.sin(t * 2) * 0.02;
+    const idleArmX = Math.PI * 0.35; // Pitch forward slightly to avoid pointing backward
+    const idleArmYL = Math.PI * 0.9;  // Flare outward to avoid clipping in torso
+    const idleArmYR = -Math.PI * 0.9; // Flare outward
+
+    // Body idle movement & Jump animation
+    if (jumpState.current === 'idle') {
+      if (torsoBone.current) torsoBone.current.scale.y = 1 + Math.sin(t * 2) * 0.02;
+      if (modelRef.current) modelRef.current.position.y = 0;
+      if (armLBone.current) {
+        armLBone.current.rotation.x = idleArmX;
+        armLBone.current.rotation.y = idleArmYL;
+        armLBone.current.rotation.z = 0;
+      }
+      if (armRBone.current) {
+        armRBone.current.rotation.x = idleArmX;
+        armRBone.current.rotation.y = idleArmYR;
+        armRBone.current.rotation.z = 0;
+      }
+    } else if (jumpState.current === 'jumping') {
+      if (jumpStartTime.current === 0) jumpStartTime.current = t;
+      const jt = t - jumpStartTime.current;
+
+      if (jt < 0.3) {
+        // jumping up
+        const progress = jt / 0.3;
+        if (modelRef.current) modelRef.current.position.y = THREE.MathUtils.lerp(0, 20, progress);
+        if (armLBone.current) {
+          armLBone.current.rotation.x = THREE.MathUtils.lerp(idleArmX, -Math.PI * 0.8, progress); // Pitch forward/up
+          armLBone.current.rotation.y = THREE.MathUtils.lerp(idleArmYL, Math.PI * 0.2, progress);  // Outward flare
+          armLBone.current.rotation.z = 0;
+        }
+        if (armRBone.current) {
+          armRBone.current.rotation.x = THREE.MathUtils.lerp(idleArmX, -Math.PI * 0.8, progress); // Pitch forward/up
+          armRBone.current.rotation.y = THREE.MathUtils.lerp(idleArmYR, -Math.PI * 0.2, progress); // Outward flare
+          armRBone.current.rotation.z = 0;
+        }
+      } else if (jt < 0.6) {
+        // falling down
+        const progress = (jt - 0.3) / 0.3;
+        if (modelRef.current) modelRef.current.position.y = THREE.MathUtils.lerp(20, 0, progress);
+        if (armLBone.current) {
+          armLBone.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.8, idleArmX, progress);
+          armLBone.current.rotation.y = THREE.MathUtils.lerp(Math.PI * 0.2, idleArmYL, progress);
+          armLBone.current.rotation.z = 0;
+        }
+        if (armRBone.current) {
+          armRBone.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.8, idleArmX, progress);
+          armRBone.current.rotation.y = THREE.MathUtils.lerp(-Math.PI * 0.2, idleArmYR, progress);
+          armRBone.current.rotation.z = 0;
+        }
+      } else {
+        jumpState.current = 'idle';
+      }
+    }
 
     // Emotion Shapekeys
     meshRefs.current.forEach((mesh) => {
@@ -222,9 +284,27 @@ const AvatarLoader = () => (
 );
 
 // --- Streaming Speech Bubble Component ---
-const StreamingBubble: React.FC<{ text?: string }> = ({ text }) => {
+interface StreamingBubbleProps {
+  text?: string;
+  isProjector?: boolean;
+  forceShow?: boolean;
+  onDismiss?: () => void;
+  children?: React.ReactNode;
+}
+
+const StreamingBubble: React.FC<StreamingBubbleProps> = ({ text, isProjector, forceShow, onDismiss, children }) => {
   const [displayed, setDisplayed] = useState('');
   const [dismissedText, setDismissedText] = useState<string | null>(null);
+  const [showProjector, setShowProjector] = useState(false);
+
+  useEffect(() => {
+    if ((text || forceShow) && isProjector) {
+      const timer = setTimeout(() => setShowProjector(true), 300); // 0.3s wait for jump to peak
+      return () => clearTimeout(timer);
+    } else {
+      setShowProjector(false);
+    }
+  }, [text, isProjector, forceShow]);
 
   useEffect(() => {
     if (!text) {
@@ -241,42 +321,82 @@ const StreamingBubble: React.FC<{ text?: string }> = ({ text }) => {
     return () => clearInterval(interval);
   }, [text]);
 
-  if (!text || text === dismissedText) return null;
+  const isDismissed = text ? text === dismissedText : !forceShow;
+  if (!forceShow && (!text || isDismissed)) return null;
+  if (isProjector && !showProjector) return null; // Waiting for jump
+
+  const containerStyle: React.CSSProperties = isProjector ? {
+    position: 'absolute',
+    top: '0',
+    left: '10px',
+    right: '10px',
+    bottom: '20px', // Pulls down adequately covering the screen
+    backgroundColor: '#e6e6e6',
+    border: '4px solid #333',
+    borderTop: '20px solid #555', // Projector roller
+    borderBottom: '10px solid #555', // Bottom weight
+    padding: '30px',
+    color: 'black',
+    fontFamily: 'var(--font-retro)',
+    fontSize: '1.2rem',
+    lineHeight: '1.5',
+    overflowY: 'auto',
+    boxShadow: '0px 10px 30px rgba(0,0,0,0.5)',
+    zIndex: 10,
+    cursor: 'pointer',
+    animation: 'projectorPullDown 0.4s ease-out forwards',
+  } : {
+    position: 'absolute',
+    bottom: '20px',
+    left: '20px',
+    right: '20px',
+    maxHeight: '40%',
+    backgroundColor: 'white',
+    border: '4px solid black',
+    padding: '16px 20px',
+    color: 'black',
+    fontFamily: 'var(--font-retro)',
+    fontSize: '1.2rem',
+    lineHeight: '1.5',
+    overflowY: 'auto',
+    boxShadow: '4px 4px 0px rgba(0,0,0,0.2)',
+    zIndex: 10,
+    cursor: 'pointer',
+  };
 
   return (
-    <div 
-      onClick={() => {
-        setDismissedText(text);
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-        }
-      }}
-      style={{
-        position: 'absolute',
-        bottom: '20px',
-        left: '20px',
-        right: '20px',
-        maxHeight: '40%',
-        backgroundColor: 'white',
-        border: '4px solid black',
-        padding: '16px 20px',
-        color: 'black',
-        fontFamily: 'var(--font-retro)',
-        fontSize: '1.2rem',
-        lineHeight: '1.5',
-        overflowY: 'auto',
-        boxShadow: '4px 4px 0px rgba(0,0,0,0.2)',
-        zIndex: 10,
-        cursor: 'pointer',
-      }}
-    >
-      <div style={{ position: 'absolute', top: '8px', right: '12px', fontSize: '0.75rem', color: '#999', fontWeight: 'bold' }}>Click to dismiss</div>
-      <div className="markdown-content" style={{ margin: 0, marginTop: '8px' }}>
-        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-          {displayed}
-        </ReactMarkdown>
+    <>
+      {isProjector && (
+        <style>{`
+          @keyframes projectorPullDown {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(0); }
+          }
+        `}</style>
+      )}
+      <div
+        onClick={() => {
+          if (text) setDismissedText(text);
+          if (onDismiss) onDismiss();
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+          }
+        }}
+        style={containerStyle}
+      >
+        <div style={{ position: 'absolute', top: isProjector ? '24px' : '8px', right: '12px', fontSize: '0.75rem', color: isProjector ? '#555' : '#999', fontWeight: 'bold' }}>
+          Click to dismiss
+        </div>
+        {text && (
+          <div className="markdown-content" style={{ margin: 0, marginTop: isProjector ? '20px' : '8px' }}>
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {displayed}
+            </ReactMarkdown>
+          </div>
+        )}
+        {children}
       </div>
-    </div>
+    </>
   );
 };
 
@@ -364,7 +484,7 @@ export const StudyRoom: React.FC = () => {
           const sdkData = message.data;
           let currentMood = 'neutral';
           let maxProb = 0;
-          
+
           if (sdkData.expressions) {
             for (const [expr, prob] of Object.entries(sdkData.expressions)) {
               if ((prob as number) > maxProb) {
@@ -418,26 +538,26 @@ export const StudyRoom: React.FC = () => {
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
-        
+
         if (ctx && video.readyState === video.HAVE_ENOUGH_DATA) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const base64Image = canvas.toDataURL('image/jpeg', 0.5); // Compress quality to 50%
-          
+
           wsRef.current.send(JSON.stringify({
             type: 'frame',
             image: base64Image
           }));
         }
       }
-      
+
       // Also send the latest focusMetrics state to the FastAPI backend
       setFocusMetrics(prevMetrics => {
-         if (prevMetrics) {
-           api.sendFocusEvent(prevMetrics).catch((err) => console.error('Error posting focus metrics:', err));
-         }
-         return prevMetrics;
+        if (prevMetrics) {
+          api.sendFocusEvent(prevMetrics).catch((err) => console.error('Error posting focus metrics:', err));
+        }
+        return prevMetrics;
       });
-      
+
     }, 5000);
 
     return () => clearInterval(interval);
@@ -516,7 +636,7 @@ export const StudyRoom: React.FC = () => {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      
+
       {/* 1. Quest Sidebar (Preserved placeholder for teammate) */}
       <div
         style={{
@@ -543,10 +663,10 @@ export const StudyRoom: React.FC = () => {
 
       {/* 2. Main Area (Zoom layout grid) */}
       <div style={{ display: 'grid', gridTemplateRows: '1fr 50px', overflow: 'hidden' }}>
-        
+
         {/* Top Grid: Camera Feeds */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', padding: '20px', overflow: 'hidden' }}>
-          
+
           {/* Webcam Feed Box */}
           <div className="pixel-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
             <h3 style={{ fontFamily: 'var(--font-retro)', fontSize: '1.5rem', marginBottom: '8px', color: 'var(--c-red-brown)' }}>
@@ -585,7 +705,7 @@ export const StudyRoom: React.FC = () => {
             <h3 style={{ fontFamily: 'var(--font-retro)', fontSize: '1.5rem', marginBottom: '8px', color: 'var(--c-red-brown)' }}>
               Study Buddy (Tutor)
             </h3>
-            
+
             {/* The Low-Res Retro Pixelated WebGL Container */}
             <div
               style={{
@@ -614,25 +734,39 @@ export const StudyRoom: React.FC = () => {
                   <directionalLight position={[-20, 30, 20]} intensity={3.5} color="#fff4d4" />
                   <directionalLight position={[20, -10, 10]} intensity={0.4} color="#8a9cba" />
                   <Suspense fallback={<AvatarLoader />}>
-                    <BunnyModel emotion={avatarEmotion} />
+                    <BunnyModel
+                      emotion={avatarEmotion}
+                      triggerProjector={showDebug || (sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' && messages[messages.length - 1].text.length > 200)}
+                    />
                   </Suspense>
                 </Canvas>
               </div>
 
-              <StreamingBubble text={sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' ? messages[messages.length - 1].text : undefined} />
+              {showDebug ? (
+                <StreamingBubble
+                  forceShow={true}
+                  isProjector={true}
+                  onDismiss={() => setShowDebug(false)}
+                >
+                  <div style={{ marginTop: '20px', fontFamily: 'var(--font-retro)' }}>
+                    <h2 style={{ marginBottom: '15px', color: 'var(--c-red-brown)', fontSize: '1.5rem', textTransform: 'uppercase' }}>System Diagnostics</h2>
+                    <div style={{ marginBottom: '10px', fontSize: '1.2rem' }}><strong>Focus Level:</strong> <span style={{ color: focusMetrics.focus > 70 ? 'var(--c-sage-dark)' : 'var(--c-burnt-orange)' }}>{focusMetrics.focus}%</span></div>
+                    <div style={{ marginBottom: '10px', fontSize: '1.2rem' }}><strong>Stress/Tiredness:</strong> <span>{focusMetrics.tiredness}%</span></div>
+                    <div style={{ marginBottom: '10px', fontSize: '1.2rem' }}><strong>User Mood:</strong> <span style={{ textTransform: 'capitalize' }}>{focusMetrics.mood}</span></div>
+                    <div style={{ fontSize: '1.2rem' }}><strong>Tutor Status:</strong> {avatarEmotion === 'angry' ? 'Stern 💢' : avatarEmotion === 'sad' ? 'Concerned 😟' : 'Happy 😊'}</div>
+                  </div>
+                </StreamingBubble>
+              ) : (
+                <StreamingBubble
+                  text={sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' ? messages[messages.length - 1].text : undefined}
+                  isProjector={sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' && messages[messages.length - 1].text.length > 200}
+                />
+              )}
 
               {/* Debug Menu & Info Button */}
               <div style={{ position: 'absolute', bottom: '10px', right: '10px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                {showDebug && (
-                  <div style={{ backgroundColor: 'var(--c-brown-dark)', color: 'white', padding: '10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 800, border: '2px solid var(--c-sand-light)' }}>
-                    <div style={{ marginBottom: '4px' }}>Focus: <span style={{ color: focusMetrics.focus > 70 ? 'var(--c-sage-dark)' : 'var(--c-burnt-orange)' }}>{focusMetrics.focus}%</span></div>
-                    <div style={{ marginBottom: '4px' }}>Stress/Tiredness: <span>{focusMetrics.tiredness}%</span></div>
-                    <div style={{ marginBottom: '4px' }}>User Mood: <span style={{ textTransform: 'capitalize' }}>{focusMetrics.mood}</span></div>
-                    <div>Tutor Status: {avatarEmotion === 'angry' ? 'Stern 💢' : avatarEmotion === 'sad' ? 'Concerned 😟' : 'Happy 😊'}</div>
-                  </div>
-                )}
-                <button 
-                  onClick={() => setShowDebug(!showDebug)} 
+                <button
+                  onClick={() => setShowDebug(!showDebug)}
                   style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'var(--c-brown-dark)', color: 'white', border: '2px solid var(--c-sand-light)', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontFamily: 'var(--font-retro)' }}
                   title="Debug Info"
                 >

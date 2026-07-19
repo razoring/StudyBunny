@@ -8,8 +8,8 @@ app = FastAPI(title="Gamified Study Room API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip().rstrip("/") for origin in settings.cors_origins.split(",")],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
