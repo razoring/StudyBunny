@@ -5,11 +5,13 @@ import type { Quest } from "../services/api";
 interface QuestProgressProps {
   documentId: string;
   onQuestSelect?: (quest: Quest) => void;
+  refreshCounter?: number;
 }
 
 export default function QuestProgress({
   documentId,
   onQuestSelect,
+  refreshCounter = 0,
 }: QuestProgressProps) {
   const [quests, setQuests] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +34,7 @@ export default function QuestProgress({
   useEffect(() => {
     if (!documentId) return;
     fetchQuests();
-  }, [documentId]);
+  }, [documentId, refreshCounter]);
 
   const done = quests.filter((q) => q.status === "done").length;
   const pct = quests.length ? Math.round((done / quests.length) * 100) : 0;
@@ -80,7 +82,7 @@ export default function QuestProgress({
   }
 
   return (
-    <div className="pixel-panel" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div className="pixel-panel" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px", height: "100%", overflow: "hidden", minHeight: 0 }}>
       <div>
         <h3 style={{ fontFamily: "var(--font-retro)", fontSize: "1.3rem", color: "var(--c-red-brown)", margin: 0 }}>
           Quest Progress
@@ -110,7 +112,7 @@ export default function QuestProgress({
         />
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", flex: 1, overflowY: "auto", paddingRight: "5px", paddingBottom: "10px", minHeight: 0 }}>
         {quests.map((q, i) => {
           const isDone = q.status === "done";
           const isCurrent = q.id === currentId;

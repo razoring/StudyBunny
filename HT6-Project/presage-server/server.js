@@ -79,6 +79,10 @@ try {
 let syntheticTimestampUs = 0;
 let lastFrameBuffer = null;
 
+let activeClientId = null;
+const clientsMap = new Map();
+let clientCounter = 0;
+
 // The SDK crashes if it doesn't receive frames at a steady >=20 FPS wall-clock rate.
 // To isolate it from WebSocket jitter and React rendering pauses, we run a dedicated 30FPS
 // loop in Node that continually feeds it the last received frame.
@@ -96,17 +100,48 @@ setInterval(() => {
     }
 }, 33);
 
+wss.on('error', (err) => {
+    console.error("WebSocket Server Error:", err);
+});
+
 wss.on('connection', (ws) => {
-    console.log('React Client connected to Presage Server.');
+    const clientId = ++clientCounter;
+    clientsMap.set(clientId, ws);
+    console.log(`React Client connected to Presage Server. ID: ${clientId}`);
+
+    // Promote to active source if none exists
+    if (!activeClientId) {
+        activeClientId = clientId;
+        console.log(`Client ${clientId} is now the primary active frame source.`);
+    }
 
     ws.on('message', async (message, isBinary) => {
         if (isBinary) {
-            // Just update the latest frame, let the interval handle submission
-            lastFrameBuffer = message;
+            // Only update frame buffer from the primary active client to prevent frame jitter
+            if (activeClientId === clientId) {
+                lastFrameBuffer = message;
+            }
         }
     });
 
+    ws.on('error', (err) => {
+        console.error(`Socket error on client ${clientId}:`, err);
+    });
+
     ws.on('close', () => {
-        console.log('React Client disconnected.');
+        console.log(`React Client ${clientId} disconnected.`);
+        clientsMap.delete(clientId);
+        
+        if (activeClientId === clientId) {
+            // Promote next available client
+            const nextActive = clientsMap.keys().next().value;
+            activeClientId = nextActive || null;
+            if (activeClientId) {
+                console.log(`Client ${activeClientId} promoted to primary active frame source.`);
+            } else {
+                console.log("No active clients remaining. Clearing frame buffer.");
+                lastFrameBuffer = null;
+            }
+        }
     });
 });

@@ -564,6 +564,7 @@ export const StudyRoom: React.FC = () => {
   // Avatar states
   const [avatarEmotion, setAvatarEmotion] = useState<'neutral' | 'angry' | 'sad'>('neutral');
   const [showDebug, setShowDebug] = useState(false);
+  const [questRefreshCounter, setQuestRefreshCounter] = useState(0);
 
   const [sessionStartIndex, setSessionStartIndex] = useState<number | null>(null);
 
@@ -665,153 +666,196 @@ export const StudyRoom: React.FC = () => {
     canvas.height = 480;
     canvasRef.current = canvas;
 
-    const ws = new WebSocket('ws://localhost:8080');
-    ws.onopen = () => {
-      console.log('Connected to Presage Node.js Server');
-    };
-    ws.onclose = () => {
-      console.log('Disconnected from Presage Node.js Server');
-    };
-    ws.onerror = () => {
-      console.error('Presage WebSocket Error');
-    };
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        if (message.type === 'detections' && message.data) {
-          const sdkData = message.data;
-          let currentMood = 'neutral';
-          let maxProb = 0;
+    let isMounted = true;
+    let reconnectTimeout: any = null;
 
-          if (!cameraActiveRef.current) {
-            // Default to neutral/focused if camera is off
-            setAvatarEmotion('neutral');
-            setFocusMetrics(prev => ({
-              ...prev,
-              focus: 90,
-              distraction: 10,
-              struggling: 0,
-              mood: 'neutral',
-              mood_confidence: 0,
-              tiredness: 5,
-              talking: false
-            }));
-            distractionScoreRef.current = 0;
-            strugglingScoreRef.current = 0;
-            return;
-          }
+    const connect = () => {
+      if (!isMounted) return;
+      console.log('Attempting connection to Presage server...');
+      
+      const ws = new WebSocket('ws://localhost:8080');
+      wsRef.current = ws;
 
-          if (sdkData.expressions) {
-            let maxNonNeutralProb = 0;
-            let maxNonNeutralMood = 'neutral';
+      ws.onopen = () => {
+        if (!isMounted) return;
+        console.log('Connected to Presage Node.js Server');
+        setServiceHealth(prev => ({ ...prev, presage: 'OK' }));
+      };
 
-            for (const [expr, prob] of Object.entries(sdkData.expressions)) {
-              if (expr !== 'neutral' && (prob as number) > maxNonNeutralProb) {
-                maxNonNeutralProb = prob as number;
-                maxNonNeutralMood = expr;
-              }
-              if ((prob as number) > maxProb) {
-                maxProb = prob as number;
-              }
-            }
+      ws.onclose = () => {
+        if (!isMounted) return;
+        console.log('Disconnected from Presage Node.js Server. Retrying in 3s...');
+        setServiceHealth(prev => ({ ...prev, presage: 'DOWN' }));
+        wsRef.current = null;
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(connect, 3000);
+      };
 
-            // 'Neutral' is mathematically dominant in most SDKs unless a face is heavily contorted.
-            // By overriding it if a non-neutral emotion crosses a 35% threshold, we make the
-            // avatar respond instantly to subtle micro-expressions.
-            if (maxNonNeutralProb > 35) {
-              currentMood = maxNonNeutralMood;
-            } else {
-              currentMood = 'neutral';
-            }
-          }
+      ws.onerror = (err) => {
+        console.error('Presage WebSocket Error:', err);
+        setServiceHealth(prev => ({ ...prev, presage: 'DOWN' }));
+      };
 
-          const isBlinking = sdkData.eyeBlink || false;
-          const updatedMetrics = {
-            user_id: 'mock_user_123',
-            document_id: documentId || '',
-            focus: (currentMood === 'happiness' || currentMood === 'neutral') ? 90 : 40,
-            // Surprise or disgust maps to distraction (losing focus on the study material)
-            distraction: (currentMood === 'surprise' || currentMood === 'disgust') ? 80 : 10,
-            // Anger, sadness, and fear map to struggling
-            struggling: (currentMood === 'anger' || currentMood === 'sadness' || currentMood === 'fear') ? 85 : 0,
-            mood: currentMood,
-            mood_confidence: Math.floor(maxProb) || 0,
-            tiredness: isBlinking ? 80 : 5,
-            talking: sdkData.talking || false
-          };
+      ws.onmessage = (event) => {
+        if (!isMounted) return;
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'detections' && message.data) {
+            const sdkData = message.data;
+            let currentMood = 'neutral';
+            let maxProb = 0;
 
-          isSdkTalkingRef.current = sdkData.talking || false;
-
-          setFocusMetrics(updatedMetrics);
-
-          sessionStatsRef.current.totalFrames += 1;
-          if (updatedMetrics.distraction > 50) sessionStatsRef.current.distractedFrames += 1;
-          if (updatedMetrics.struggling > 50) sessionStatsRef.current.strugglingFrames += 1;
-
-          if (isAvatarTalkingRef.current) {
-            strugglingScoreRef.current = 0;
-            distractionScoreRef.current = 0;
-          } else {
-            if (updatedMetrics.struggling > 50) {
-              setAvatarEmotion('sad');
-              strugglingScoreRef.current += 1;
-              if (strugglingScoreRef.current >= 100) { // 10 seconds at 10fps
-                strugglingScoreRef.current = 0;
-                if (currentAudioRef.current?.paused ?? true) {
-                  const msgs = [
-                    "Do you need any help with this material?",
-                    "You look a bit confused. Want me to explain it differently?",
-                    "If this is too difficult, we can break it down into smaller steps."
-                  ];
-                  const msg = msgs[Math.floor(Math.random() * msgs.length)];
-                  const tempAvatarMsg: ChatMessage = { id: Math.random().toString(), quest_id: '', role: 'avatar', text: msg, created_at: new Date().toISOString() };
-                  setMessages(prev => [...prev, tempAvatarMsg]);
-                  api.injectChatMessage('', documentId || '', msg).catch(err => console.error('Failed to inject TTS message:', err));
-                  playTTS(msg);
-                }
-              }
-            } else {
-              strugglingScoreRef.current = Math.max(0, strugglingScoreRef.current - 1);
-            }
-
-            if (updatedMetrics.distraction > 50) {
-              setAvatarEmotion('angry');
-              distractionScoreRef.current += 1;
-              if (distractionScoreRef.current >= 100) { // 10 seconds at 10fps
-                distractionScoreRef.current = 0;
-                if (currentAudioRef.current?.paused ?? true) {
-                  const msgs = [
-                    "Hey, are you still paying attention to the material?",
-                    "Let's try to focus on this section for a bit longer.",
-                    "Don't lose focus now, you're doing great!"
-                  ];
-                  const msg = msgs[Math.floor(Math.random() * msgs.length)];
-                  const tempAvatarMsg: ChatMessage = { id: Math.random().toString(), quest_id: '', role: 'avatar', text: msg, created_at: new Date().toISOString() };
-                  setMessages(prev => [...prev, tempAvatarMsg]);
-                  api.injectChatMessage('', documentId || '', msg).catch(err => console.error('Failed to inject TTS message:', err));
-                  playTTS(msg);
-                }
-              }
-            } else {
-              distractionScoreRef.current = Math.max(0, distractionScoreRef.current - 1);
-            }
-
-            if (updatedMetrics.struggling <= 50 && updatedMetrics.distraction <= 50) {
+            if (!cameraActiveRef.current) {
+              // Default to neutral/focused if camera is off
               setAvatarEmotion('neutral');
+              setFocusMetrics(prev => ({
+                ...prev,
+                focus: 90,
+                distraction: 10,
+                struggling: 0,
+                mood: 'neutral',
+                mood_confidence: 0,
+                tiredness: 5,
+                talking: false
+              }));
+              distractionScoreRef.current = 0;
+              strugglingScoreRef.current = 0;
+              return;
+            }
+
+            if (sdkData.expressions) {
+              let maxNonNeutralProb = 0;
+              let maxNonNeutralMood = 'neutral';
+
+              for (const [expr, prob] of Object.entries(sdkData.expressions)) {
+                if (expr !== 'neutral' && (prob as number) > maxNonNeutralProb) {
+                  maxNonNeutralProb = prob as number;
+                  maxNonNeutralMood = expr;
+                }
+                if ((prob as number) > maxProb) {
+                  maxProb = prob as number;
+                }
+              }
+
+              if (maxNonNeutralProb > 35) {
+                currentMood = maxNonNeutralMood;
+              } else {
+                currentMood = 'neutral';
+              }
+            }
+
+            const isBlinking = sdkData.eyeBlink || false;
+            const updatedMetrics = {
+              user_id: 'mock_user_123',
+              document_id: documentId || '',
+              focus: (currentMood === 'happiness' || currentMood === 'neutral') ? 90 : 40,
+              distraction: (currentMood === 'surprise' || currentMood === 'disgust') ? 80 : 10,
+              struggling: (currentMood === 'anger' || currentMood === 'sadness' || currentMood === 'fear') ? 85 : 0,
+              mood: currentMood,
+              mood_confidence: Math.floor(maxProb) || 0,
+              tiredness: isBlinking ? 80 : 5,
+              talking: sdkData.talking || false
+            };
+
+            isSdkTalkingRef.current = sdkData.talking || false;
+            setFocusMetrics(updatedMetrics);
+
+            sessionStatsRef.current.totalFrames += 1;
+            if (updatedMetrics.distraction > 50) sessionStatsRef.current.distractedFrames += 1;
+            if (updatedMetrics.struggling > 50) sessionStatsRef.current.strugglingFrames += 1;
+
+            if (isAvatarTalkingRef.current) {
+              strugglingScoreRef.current = 0;
+              distractionScoreRef.current = 0;
+            } else {
+              if (updatedMetrics.struggling > 50) {
+                setAvatarEmotion('sad');
+                strugglingScoreRef.current += 1;
+                if (strugglingScoreRef.current >= 100) {
+                  strugglingScoreRef.current = 0;
+                  if (currentAudioRef.current?.paused ?? true) {
+                    const msgs = [
+                      "Do you need any help with this material?",
+                      "You look a bit confused. Want me to explain it differently?",
+                      "If this is too difficult, we can break it down into smaller steps."
+                    ];
+                    const msg = msgs[Math.floor(Math.random() * msgs.length)];
+                    const tempAvatarMsg: ChatMessage = { id: Math.random().toString(), quest_id: '', role: 'avatar', text: msg, created_at: new Date().toISOString() };
+                    setMessages(prev => [...prev, tempAvatarMsg]);
+                    api.injectChatMessage('', documentId || '', msg).catch(err => console.error('Failed to inject TTS message:', err));
+                    playTTS(msg);
+                  }
+                }
+              } else {
+                strugglingScoreRef.current = Math.max(0, strugglingScoreRef.current - 1);
+              }
+
+              if (updatedMetrics.distraction > 50) {
+                setAvatarEmotion('angry');
+                distractionScoreRef.current += 1;
+                if (distractionScoreRef.current >= 100) {
+                  distractionScoreRef.current = 0;
+                  if (currentAudioRef.current?.paused ?? true) {
+                    const msgs = [
+                      "Hey, are you still paying attention to the material?",
+                      "Let's try to focus on this section for a bit longer.",
+                      "Don't lose focus now, you're doing great!"
+                    ];
+                    const msg = msgs[Math.floor(Math.random() * msgs.length)];
+                    const tempAvatarMsg: ChatMessage = { id: Math.random().toString(), quest_id: '', role: 'avatar', text: msg, created_at: new Date().toISOString() };
+                    setMessages(prev => [...prev, tempAvatarMsg]);
+                    api.injectChatMessage('', documentId || '', msg).catch(err => console.error('Failed to inject TTS message:', err));
+                    playTTS(msg);
+                  }
+                }
+              } else {
+                distractionScoreRef.current = Math.max(0, distractionScoreRef.current - 1);
+              }
+
+              if (updatedMetrics.struggling <= 50 && updatedMetrics.distraction <= 50) {
+                setAvatarEmotion('neutral');
+              }
             }
           }
+        } catch (err) {
+          console.error('Error parsing WS message:', err);
         }
-      } catch (err) {
-        console.error('Error parsing WS message:', err);
-      }
+      };
     };
-    ws.onclose = () => console.log('Disconnected from Presage Node.js Server');
-    wsRef.current = ws;
+
+    connect();
 
     return () => {
-      ws.close();
+      isMounted = false;
+      clearTimeout(reconnectTimeout);
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
     };
   }, [documentId]);
+
+  // Periodic micro-movement (jitter) to keep telemetry metrics continuously shifting slightly
+  useEffect(() => {
+    const jitterInterval = setInterval(() => {
+      setFocusMetrics(prev => {
+        if (!prev) return prev;
+        const applyJitter = (val: number, min = 0, max = 100) => {
+          const shift = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
+          const nextVal = val + shift;
+          return Math.max(min, Math.min(max, nextVal));
+        };
+        return {
+          ...prev,
+          focus: applyJitter(prev.focus, 10, 100),
+          distraction: applyJitter(prev.distraction, 0, 100),
+          struggling: applyJitter(prev.struggling, 0, 100),
+          tiredness: applyJitter(prev.tiredness, 0, 100),
+        };
+      });
+    }, 500);
+
+    return () => clearInterval(jitterInterval);
+  }, []);
 
   // Periodic Presage Tracking Loop (sends webcam frames to Node.js)
   useEffect(() => {
@@ -934,6 +978,7 @@ export const StudyRoom: React.FC = () => {
       };
       setMessages((prev) => [...prev, avatarMsg]);
       playTTS(response.reply);
+      setQuestRefreshCounter((prev) => prev + 1);
     } catch (err) {
       console.error('Chat query failed:', err);
     } finally {
@@ -1102,14 +1147,16 @@ export const StudyRoom: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
+          minHeight: 0,
         }}
       >
-        <div>
-          <h2 style={{ fontFamily: 'var(--font-retro)', fontSize: '2rem', color: 'var(--c-brown-dark)', marginBottom: '15px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0, marginBottom: '20px' }}>
+          <h2 style={{ fontFamily: 'var(--font-retro)', fontSize: '2rem', color: 'var(--c-brown-dark)', marginBottom: '15px', flexShrink: 0 }}>
             Quests
           </h2>
-          <QuestProgress documentId={documentId || ''} />
-
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '5px' }}>
+            <QuestProgress documentId={documentId || ''} refreshCounter={questRefreshCounter} />
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="pixel-button" onClick={() => navigate('/home')} style={{ flex: 1, justifyContent: 'center' }}>
