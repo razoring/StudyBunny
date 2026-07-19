@@ -672,7 +672,7 @@ export const StudyRoom: React.FC = () => {
     const connect = () => {
       if (!isMounted) return;
       console.log('Attempting connection to Presage server...');
-      
+
       const ws = new WebSocket('ws://localhost:8080');
       wsRef.current = ws;
 
@@ -1019,7 +1019,7 @@ export const StudyRoom: React.FC = () => {
         const avg = sum / dataArray.length;
 
         // Use raw volume for Voice Activity Detection.
-        const speechDetected = avg > 15;
+        const speechDetected = avg > 10;
 
         if (speechDetected) { // Speech detected threshold
           // Interrupt LLM/TTS
