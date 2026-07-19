@@ -3,6 +3,7 @@ import re
 import json
 from datetime import datetime, timezone
 from fastapi import APIRouter
+from pydantic import BaseModel
 from app.db.mongo import chat_messages_collection, quests_collection
 from app.models.schemas import ChatRequest, ChatResponse
 from app.services.rag_service import answer_question
