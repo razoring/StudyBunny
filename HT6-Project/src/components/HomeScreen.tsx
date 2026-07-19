@@ -91,7 +91,16 @@ export const HomeScreen: React.FC = () => {
 
   return (
     <div style={{ maxWidth: '1240px', margin: '40px auto', padding: '0 20px' }}>
-      <header style={{ textAlign: 'center', marginBottom: '40px' }}>
+      <header style={{ textAlign: 'center', marginBottom: '40px', position: 'relative' }}>
+        <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+          <button 
+            className="pixel-button" 
+            onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+            style={{ padding: '8px 16px', fontSize: '0.9rem' }}
+          >
+            Logout
+          </button>
+        </div>
         <h1 className="pixel-title">Cozy Study Room</h1>
         <p style={{ fontSize: '1.2rem', color: 'var(--c-sand-dark)', fontWeight: 600 }}>
           Your Animal Crossing-inspired virtual learning space
