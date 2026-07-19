@@ -4,6 +4,10 @@ require('dotenv').config({ path: '../../backend/.env' });
 const { SmartSpectraSDK, PixelFormat, faceMetrics, setMetricsClass, decodeMetrics } = require('@smartspectra/node-sdk');
 const { Metrics } = require('@smartspectra/node-sdk/messages');
 
+const fs = require('fs');
+const path = require('path');
+const { preconfigure } = require('@smartspectra/node-sdk/js/ffi');
+
 const PORT = 8080;
 const wss = new WebSocket.Server({ port: PORT });
 console.log(`Presage SmartSpectra WebSocket server started on ws://localhost:${PORT}`);
@@ -12,6 +16,12 @@ setMetricsClass(Metrics);
 
 let sdk = null;
 try {
+    const cacheDir = path.join(__dirname, '.cache');
+    if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+    }
+    preconfigure(cacheDir);
+
     sdk = new SmartSpectraSDK({ 
         apiKey: process.env.PRESAGE,
         requestedMetrics: faceMetrics

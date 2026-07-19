@@ -14,6 +14,7 @@ class FocusEventRequest(BaseModel):
     mood: str
     mood_confidence: float  # 0 to 100
     tiredness: float  # 0 to 100
+    talking: bool = False
 
 @router.post("/event")
 async def record_focus_event(event: FocusEventRequest):

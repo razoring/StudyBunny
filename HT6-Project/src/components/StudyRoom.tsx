@@ -474,6 +474,7 @@ export const StudyRoom: React.FC = () => {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState(true);
+  const cameraActiveRef = useRef(true);
   const [micActive, setMicActive] = useState(true);
   const [ttsActive, setTtsActive] = useState(true);
 
@@ -486,6 +487,7 @@ export const StudyRoom: React.FC = () => {
   const silenceTimerRef = useRef<any>(null);
   const hideBubbleTimerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
+  const isSdkTalkingRef = useRef<boolean>(false);
   
   // Accumulator tracking for spontaneous interaction (frame counts)
   const distractionScoreRef = useRef<number>(0);
@@ -522,6 +524,7 @@ export const StudyRoom: React.FC = () => {
     mood: 'neutral',
     mood_confidence: 90,
     tiredness: 5,
+    talking: false
   });
 
   // Avatar states
@@ -646,6 +649,24 @@ export const StudyRoom: React.FC = () => {
           let currentMood = 'neutral';
           let maxProb = 0;
 
+          if (!cameraActiveRef.current) {
+            // Default to neutral/focused if camera is off
+            setAvatarEmotion('neutral');
+            setFocusMetrics(prev => ({
+              ...prev,
+              focus: 90,
+              distraction: 10,
+              struggling: 0,
+              mood: 'neutral',
+              mood_confidence: 0,
+              tiredness: 5,
+              talking: false
+            }));
+            distractionScoreRef.current = 0;
+            strugglingScoreRef.current = 0;
+            return;
+          }
+
           if (sdkData.expressions) {
             let maxNonNeutralProb = 0;
             let maxNonNeutralMood = 'neutral';
@@ -682,7 +703,10 @@ export const StudyRoom: React.FC = () => {
             mood: currentMood,
             mood_confidence: Math.floor(maxProb) || 0,
             tiredness: isBlinking ? 80 : 5,
+            talking: sdkData.talking || false
           };
+
+          isSdkTalkingRef.current = sdkData.talking || false;
 
           setFocusMetrics(updatedMetrics);
 
@@ -790,6 +814,7 @@ export const StudyRoom: React.FC = () => {
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setCameraActive(videoTrack.enabled);
+        cameraActiveRef.current = videoTrack.enabled;
       }
     }
   };
@@ -905,7 +930,10 @@ export const StudyRoom: React.FC = () => {
         const sum = dataArray.reduce((a, b) => a + b, 0);
         const avg = sum / dataArray.length;
 
-        if (avg > 15) { // Speech detected threshold
+        // If camera is on, use SmartSpectra mouth movement. Otherwise fallback to raw volume.
+        const speechDetected = cameraActive ? (isSdkTalkingRef.current && avg > 2) : (avg > 15);
+
+        if (speechDetected) { // Speech detected threshold
           // Interrupt LLM/TTS
           if (currentAudioRef.current && !currentAudioRef.current.paused) {
             currentAudioRef.current.pause();
@@ -1179,6 +1207,14 @@ export const StudyRoom: React.FC = () => {
                       </div>
                       <div style={{ width: '100%', height: '10px', backgroundColor: '#ddd', borderRadius: '5px', overflow: 'hidden' }}>
                         <div style={{ width: `${focusMetrics.tiredness}%`, height: '100%', backgroundColor: 'var(--c-burnt-orange)' }}></div>
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '15px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', marginBottom: '2px' }}>
+                        <strong>Talking (SDK)</strong>
+                        <span style={{ color: focusMetrics.talking ? 'var(--c-sage-dark)' : 'var(--c-coral)' }}>
+                          {focusMetrics.talking ? 'YES' : 'NO'}
+                        </span>
                       </div>
                     </div>
 

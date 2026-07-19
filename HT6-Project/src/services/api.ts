@@ -17,6 +17,7 @@ export interface FocusEvent {
   mood: string;
   mood_confidence: number;
   tiredness: number;
+  talking: boolean;
   timestamp?: string;
 }
 
