@@ -73,4 +73,36 @@ def get_tts(req: TTSRequest):
     else:
         print(f"ElevenLabs TTS Error: {response.status_code} - {response.text}")
         return Response(status_code=response.status_code, content=response.text)
+import whisper
+import tempfile
+import os
+from fastapi import UploadFile, File
 
+# Load whisper model globally (lazy load inside endpoint is also fine, but let's do lazy load to speed up startup)
+whisper_model = None
+
+@router.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    global whisper_model
+    if whisper_model is None:
+        print("Loading Whisper model...")
+        whisper_model = whisper.load_model("tiny")
+    
+    # Save the incoming WebM/audio file temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        # Transcribe
+        result = whisper_model.transcribe(tmp_path)
+        text = result.get("text", "").strip()
+    except Exception as e:
+        print(f"Whisper Transcription Error: {e}")
+        text = ""
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    return {"text": text}
