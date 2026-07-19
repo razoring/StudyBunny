@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import type { Document, Quest } from '../services/api';
@@ -12,6 +13,7 @@ export const HomeScreen: React.FC = () => {
   const [uploading, setUploading] = useState<boolean>(false);
   const [dragActive, setDragActive] = useState<boolean>(false);
   const navigate = useNavigate();
+  const { logout, user } = useAuth0();
 
   useEffect(() => {
     fetchSessions();

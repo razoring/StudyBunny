@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { useGLTF, OrbitControls } from '@react-three/drei';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useGLTF, Center } from '@react-three/drei';
 import * as THREE from 'three';
+import { SkeletonUtils } from 'three-stdlib';
 import { api } from '../services/api';
 import type { ChatMessage, FocusEvent } from '../services/api';
 
@@ -16,7 +17,8 @@ interface BunnyProps {
 }
 
 const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
-  const { scene } = useGLTF('/bunny.glb?v=3');
+  const { scene } = useGLTF('/bunny.glb?v=8');
+  const clonedScene = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const modelRef = useRef<THREE.Group>(null);
 
   const earLBone = useRef<THREE.Bone | null>(null);
@@ -29,34 +31,38 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
   const armLBone = useRef<THREE.Bone | null>(null);
   const armRBone = useRef<THREE.Bone | null>(null);
   const torsoBone = useRef<THREE.Bone | null>(null);
-  const meshRef = useRef<THREE.SkinnedMesh | null>(null);
+  const meshRefs = useRef<THREE.SkinnedMesh[]>([]);
 
   useEffect(() => {
-    scene.traverse((obj) => {
-      if ((obj as THREE.Bone).isBone) {
-        if (obj.name.includes('Ear.L')) earLBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Ear.R')) earRBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Eye.L')) eyeLBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Eye.R')) eyeRBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Eyebrow.L')) eyebrowLBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Eyebrow.R')) eyebrowRBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Head')) headBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Arm.L')) armLBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Arm.R')) armRBone.current = obj as THREE.Bone;
-        if (obj.name.includes('Torso')) torsoBone.current = obj as THREE.Bone;
-      }
-      if ((obj as THREE.SkinnedMesh).isSkinnedMesh) {
-        meshRef.current = obj as THREE.SkinnedMesh;
+    meshRefs.current = [];
+    clonedScene.traverse((obj) => {
+      const lowerName = (obj.name || '').toLowerCase();
+      
+      if (lowerName.includes('ear') && (lowerName.includes('l') || lowerName.includes('_l'))) earLBone.current = obj as THREE.Bone;
+      if (lowerName.includes('ear') && (lowerName.includes('r') || lowerName.includes('_r'))) earRBone.current = obj as THREE.Bone;
+      if (lowerName.includes('eye') && (lowerName.includes('l') || lowerName.includes('_l')) && !lowerName.includes('brow')) eyeLBone.current = obj as THREE.Bone;
+      if (lowerName.includes('eye') && (lowerName.includes('r') || lowerName.includes('_r')) && !lowerName.includes('brow')) eyeRBone.current = obj as THREE.Bone;
+      if (lowerName.includes('eyebrow') && (lowerName.includes('l') || lowerName.includes('_l'))) eyebrowLBone.current = obj as THREE.Bone;
+      if (lowerName.includes('eyebrow') && (lowerName.includes('r') || lowerName.includes('_r'))) eyebrowRBone.current = obj as THREE.Bone;
+      if (lowerName.includes('head')) headBone.current = obj as THREE.Bone;
+      if (lowerName.includes('arm') && (lowerName.includes('l') || lowerName.includes('_l'))) armLBone.current = obj as THREE.Bone;
+      if (lowerName.includes('arm') && (lowerName.includes('r') || lowerName.includes('_r'))) armRBone.current = obj as THREE.Bone;
+      if (lowerName.includes('torso')) torsoBone.current = obj as THREE.Bone;
+      
+      if ((obj as any).isMesh || (obj as any).isSkinnedMesh) {
+        if ((obj as any).morphTargetInfluences) {
+          meshRefs.current.push(obj as THREE.SkinnedMesh);
+        }
       }
     });
-  }, [scene]);
+  }, [clonedScene]);
 
   const blinkTimer = useRef(0);
   const blinkDuration = useRef(0.15);
   const isBlinking = useRef(false);
   const earTwitchTimer = useRef(0);
   const isEarTwitching = useRef(false);
-  const earTwitchSide = useRef<'L' | 'R'>('L');
+  const earTwitchSide = useRef<'L' | 'R' | 'BOTH'>('L');
 
   useFrame((state, delta) => {
     // Blinking
@@ -66,39 +72,62 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
       blinkTimer.current = 0;
     }
 
-    if (isBlinking.current && meshRef.current?.morphTargetInfluences) {
-      const blinkIdx = meshRef.current.morphTargetDictionary?.['Blink'];
+    meshRefs.current.forEach((mesh) => {
+      const blinkIdx = mesh.morphTargetDictionary?.['Blink'];
       if (blinkIdx !== undefined) {
-        if (blinkTimer.current < blinkDuration.current) {
-          meshRef.current.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(meshRef.current.morphTargetInfluences[blinkIdx], 1, delta * 25);
-        } else if (blinkTimer.current < blinkDuration.current * 2) {
-          meshRef.current.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(meshRef.current.morphTargetInfluences[blinkIdx], 0, delta * 25);
+        if (isBlinking.current) {
+          if (blinkTimer.current < blinkDuration.current) {
+            mesh.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[blinkIdx], 1.5, delta * 30);
+          } else if (blinkTimer.current < blinkDuration.current * 2) {
+            mesh.morphTargetInfluences[blinkIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[blinkIdx], 0, delta * 30);
+          } else {
+            mesh.morphTargetInfluences[blinkIdx] = 0;
+          }
         } else {
-          meshRef.current.morphTargetInfluences[blinkIdx] = 0;
-          isBlinking.current = false;
-          blinkTimer.current = 0;
+          mesh.morphTargetInfluences[blinkIdx] = 0;
         }
       }
+    });
+
+    if (isBlinking.current && blinkTimer.current >= blinkDuration.current * 2) {
+      isBlinking.current = false;
+      blinkTimer.current = 0;
     }
 
     // Ear Twitching
     earTwitchTimer.current += delta;
-    if (!isEarTwitching.current && earTwitchTimer.current > 5 + Math.random() * 5) {
+    if (!isEarTwitching.current && earTwitchTimer.current > 8 + Math.random() * 7) {
       isEarTwitching.current = true;
       earTwitchTimer.current = 0;
-      earTwitchSide.current = Math.random() > 0.5 ? 'L' : 'R';
+      const rand = Math.random();
+      if (rand < 0.33) earTwitchSide.current = 'L';
+      else if (rand < 0.66) earTwitchSide.current = 'R';
+      else earTwitchSide.current = 'BOTH';
     }
 
     if (isEarTwitching.current) {
-      const bone = earTwitchSide.current === 'L' ? earLBone.current : earRBone.current;
-      if (bone) {
-        if (earTwitchTimer.current < 0.2) {
-          bone.rotation.z = Math.sin(earTwitchTimer.current * 50) * 0.15;
-        } else {
-          bone.rotation.z = 0;
-          isEarTwitching.current = false;
-          earTwitchTimer.current = 0;
-        }
+      const bones = [];
+      if (earTwitchSide.current === 'L' || earTwitchSide.current === 'BOTH') bones.push(earLBone.current);
+      if (earTwitchSide.current === 'R' || earTwitchSide.current === 'BOTH') bones.push(earRBone.current);
+      
+      if (earTwitchTimer.current < 0.3) {
+        // Soft, single twitch pulse
+        const rotation = Math.sin(earTwitchTimer.current * 10) * 0.1;
+        bones.forEach(bone => { 
+          if (bone) {
+            bone.rotation.x = 0;
+            bone.rotation.z = rotation;
+          } 
+        });
+      } else {
+        bones.forEach(bone => { 
+          if (bone) {
+            bone.rotation.x = 0;
+            bone.rotation.z = 0;
+          } 
+        });
+        isEarTwitching.current = false;
+        earTwitchTimer.current = 0;
       }
     }
 
@@ -119,33 +148,26 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
       headBone.current.rotation.z = Math.cos(t * 0.6) * 0.02;
     }
 
-    // Body and Arm idle movement
+    // Body idle movement
     if (torsoBone.current) torsoBone.current.scale.y = 1 + Math.sin(t * 2) * 0.02;
-    if (armLBone.current) armLBone.current.rotation.z = Math.sin(t * 1.5) * 0.05;
-    if (armRBone.current) armRBone.current.rotation.z = Math.sin(t * 1.5 + Math.PI) * 0.05;
 
-    // Eyebrow and Emotion Shapekeys
-    let targetEyebrowZ = 0;
-    if (emotion === 'angry') targetEyebrowZ = -0.2;
-    if (emotion === 'sad') targetEyebrowZ = 0.2;
+    // Emotion Shapekeys
+    meshRefs.current.forEach((mesh) => {
+      if (mesh.morphTargetInfluences) {
+        const angryIdx = mesh.morphTargetDictionary?.['Angry'];
+        const sadIdx = mesh.morphTargetDictionary?.['Sad'];
 
-    if (eyebrowLBone.current) eyebrowLBone.current.rotation.z = THREE.MathUtils.lerp(eyebrowLBone.current.rotation.z, targetEyebrowZ, delta * 5);
-    if (eyebrowRBone.current) eyebrowRBone.current.rotation.z = THREE.MathUtils.lerp(eyebrowRBone.current.rotation.z, -targetEyebrowZ, delta * 5);
-
-    if (meshRef.current?.morphTargetInfluences) {
-      const angryIdx = meshRef.current.morphTargetDictionary?.['Angry'];
-      const sadIdx = meshRef.current.morphTargetDictionary?.['Sad'];
-
-      if (angryIdx !== undefined) {
-        meshRef.current.morphTargetInfluences[angryIdx] = THREE.MathUtils.lerp(meshRef.current.morphTargetInfluences[angryIdx], emotion === 'angry' ? 1 : 0, delta * 8);
+        if (angryIdx !== undefined) {
+          mesh.morphTargetInfluences[angryIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[angryIdx], emotion === 'angry' ? 1 : 0, delta * 8);
+        }
+        if (sadIdx !== undefined) {
+          mesh.morphTargetInfluences[sadIdx] = THREE.MathUtils.lerp(mesh.morphTargetInfluences[sadIdx], emotion === 'sad' ? 1 : 0, delta * 8);
+        }
       }
-      if (sadIdx !== undefined) {
-        meshRef.current.morphTargetInfluences[sadIdx] = THREE.MathUtils.lerp(meshRef.current.morphTargetInfluences[sadIdx], emotion === 'sad' ? 1 : 0, delta * 8);
-      }
-    }
+    });
   });
 
-  return <primitive ref={modelRef} object={scene} position={[0, -45, 0]} scale={[12, 12, 12]} />;
+  return <primitive ref={modelRef} object={clonedScene} position={[30, -45, 0]} scale={[12, 12, 12]} />;
 };
 
 
@@ -216,60 +238,103 @@ export const StudyRoom: React.FC = () => {
     };
   }, [documentId]);
 
-  // Periodic Presage Tracking Loop (sends focus metrics to backend)
+  // WebSocket Connection to Node.js Presage Server
+  const wsRef = useRef<WebSocket | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
   useEffect(() => {
-    if (!documentId) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    canvasRef.current = canvas;
+
+    const ws = new WebSocket('ws://localhost:8080');
+    ws.onopen = () => console.log('Connected to Presage Node.js Server');
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'detections' && message.data) {
+          const sdkData = message.data;
+          let currentMood = 'neutral';
+          let maxProb = 0;
+          
+          if (sdkData.expressions) {
+            for (const [expr, prob] of Object.entries(sdkData.expressions)) {
+              if ((prob as number) > maxProb) {
+                maxProb = prob as number;
+                currentMood = expr;
+              }
+            }
+          }
+
+          const isBlinking = sdkData.eyeBlink || false;
+          const updatedMetrics = {
+            user_id: 'mock_user_123',
+            document_id: documentId || '',
+            focus: (currentMood === 'happiness' || currentMood === 'neutral') ? 90 : 40,
+            distraction: (currentMood === 'surprise' || currentMood === 'fear') ? 80 : 10,
+            struggling: (currentMood === 'anger' || currentMood === 'sadness') ? 85 : 0,
+            mood: currentMood,
+            mood_confidence: Math.floor(maxProb * 100) || 100,
+            tiredness: isBlinking ? 80 : 5,
+          };
+
+          setFocusMetrics(updatedMetrics);
+
+          if (updatedMetrics.struggling > 50) {
+            setAvatarEmotion('sad');
+          } else if (updatedMetrics.distraction > 50) {
+            setAvatarEmotion('angry');
+          } else {
+            setAvatarEmotion('neutral');
+          }
+        }
+      } catch (err) {
+        console.error('Error parsing WS message:', err);
+      }
+    };
+    ws.onclose = () => console.log('Disconnected from Presage Node.js Server');
+    wsRef.current = ws;
+
+    return () => {
+      ws.close();
+    };
+  }, [documentId]);
+
+  // Periodic Presage Tracking Loop (sends webcam frames to Node.js)
+  useEffect(() => {
+    if (!documentId || !cameraActive) return;
 
     const interval = setInterval(() => {
-      // Get or generate metrics
-      // Checks if global PresageSDK exists, otherwise fallbacks to mock simulator
-      let updatedMetrics: FocusEvent;
-
-      if ((window as any).PresageSDK) {
-        const sdkData = (window as any).PresageSDK.getLatestDetections();
-        updatedMetrics = {
-          user_id: 'mock_user_123',
-          document_id: documentId,
-          focus: sdkData.focusScore || 90,
-          distraction: sdkData.distractionScore || 10,
-          struggling: sdkData.strugglingScore || 0,
-          mood: sdkData.mood || 'neutral',
-          mood_confidence: sdkData.moodConfidence || 95,
-          tiredness: sdkData.tirednessScore || 5,
-        };
-      } else {
-        // Mock simulation loop to make it interactive in local dev
-        const isStruggling = Math.random() > 0.85;
-        const isDistracted = Math.random() > 0.8;
-        updatedMetrics = {
-          user_id: 'mock_user_123',
-          document_id: documentId,
-          focus: Math.max(50, Math.floor(80 + Math.random() * 20 - (isDistracted ? 30 : 0))),
-          distraction: isDistracted ? Math.floor(40 + Math.random() * 30) : Math.floor(5 + Math.random() * 10),
-          struggling: isStruggling ? Math.floor(60 + Math.random() * 40) : 0,
-          mood: isStruggling ? 'frustrated' : isDistracted ? 'distracted' : 'neutral',
-          mood_confidence: Math.floor(85 + Math.random() * 15),
-          tiredness: Math.floor(5 + Math.random() * 15),
-        };
+      // Extract frame from video and send over WebSocket
+      if (wsRef.current?.readyState === WebSocket.OPEN && videoRef.current && canvasRef.current) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx && video.readyState === video.HAVE_ENOUGH_DATA) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const base64Image = canvas.toDataURL('image/jpeg', 0.5); // Compress quality to 50%
+          
+          wsRef.current.send(JSON.stringify({
+            type: 'frame',
+            image: base64Image
+          }));
+        }
       }
-
-      setFocusMetrics(updatedMetrics);
-
-      // Trigger Avatar expressions dynamically based on study state
-      if (updatedMetrics.struggling > 50) {
-        setAvatarEmotion('sad'); // Tutor looks concerned/sad for user
-      } else if (updatedMetrics.distraction > 50) {
-        setAvatarEmotion('angry'); // Tutor looks stern
-      } else {
-        setAvatarEmotion('neutral'); // Tutor looks happy/calm
-      }
-
-      // Send to FastAPI focus endpoint in background
-      api.sendFocusEvent(updatedMetrics).catch((err) => console.error('Error posting focus metrics:', err));
+      
+      // Also send the latest focusMetrics state to the FastAPI backend
+      setFocusMetrics(prevMetrics => {
+         if (prevMetrics) {
+           api.sendFocusEvent(prevMetrics).catch((err) => console.error('Error posting focus metrics:', err));
+         }
+         return prevMetrics;
+      });
+      
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [documentId]);
+  }, [documentId, cameraActive]);
 
   // Handle camera toggle
   const toggleCamera = () => {
@@ -447,7 +512,6 @@ export const StudyRoom: React.FC = () => {
                   <Suspense fallback={<AvatarLoader />}>
                     <BunnyModel emotion={avatarEmotion} />
                   </Suspense>
-                  <OrbitControls enableZoom={false} enablePan={false} maxPolarAngle={Math.PI / 2} minPolarAngle={Math.PI / 2} />
                 </Canvas>
               </div>
 
