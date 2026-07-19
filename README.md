@@ -1,4 +1,4 @@
-[https://vimeo.com/1211164701](Demo)
+[https://vimeo.com/1211164701](https://vimeo.com/1211164701)
 
 ## About StudyBunny 
 Meet StudyBunny: a virtual study room that gamifies learning with a 3D bunny avatar. Upload dense documents and StudyBunny turns topics into bite-sized quests. The avatar uses computer vision to detect distraction and encourages you to stay on track. You can talk to the bunny about your material, and it teaches you out loud.
