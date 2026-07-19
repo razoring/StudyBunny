@@ -30,7 +30,7 @@ try {
                 const lastTalk = data.face.talking?.length ? data.face.talking[data.face.talking.length - 1] : null;
 
                 // Build expressions dictionary based on whatever the protobuf returns
-                let expressions = { neutral: 1.0 };
+                let expressions = { neutral: 100.0 };
                 if (lastExpr && lastExpr.scores) {
                     expressions = {
                         neutral: 0, happiness: 0, sadness: 0, anger: 0,
@@ -75,27 +75,32 @@ try {
 }
 
 let syntheticTimestampUs = 0;
-let lastFrameTime = 0;
+let lastFrameBuffer = null;
+
+// The SDK crashes if it doesn't receive frames at a steady >=20 FPS wall-clock rate.
+// To isolate it from WebSocket jitter and React rendering pauses, we run a dedicated 30FPS
+// loop in Node that continually feeds it the last received frame.
+setInterval(() => {
+    if (sdk && lastFrameBuffer) {
+        try {
+            const width = 640;
+            const height = 480;
+            const stride = width * 4;
+            syntheticTimestampUs += 33333; 
+            sdk.sendFrame(lastFrameBuffer, width, height, stride, PixelFormat.kRGBA, syntheticTimestampUs);
+        } catch (error) {
+            console.error("Error sending frame to SDK:", error);
+        }
+    }
+}, 33);
 
 wss.on('connection', (ws) => {
     console.log('React Client connected to Presage Server.');
 
     ws.on('message', async (message, isBinary) => {
-        if (isBinary && sdk) {
-            try {
-                // message is a Buffer containing RGBA data (640x480 * 4 = 1228800 bytes)
-                const width = 640;
-                const height = 480;
-                const stride = width * 4;
-                
-                // Force exactly 30fps synthetic timestamps to satisfy the SDK's 20fps minimum requirement,
-                // regardless of network jitter or browser throttling.
-                syntheticTimestampUs += 33333; 
-                
-                sdk.sendFrame(message, width, height, stride, PixelFormat.kRGBA, syntheticTimestampUs);
-            } catch (error) {
-                console.error("Error sending frame to SDK:", error);
-            }
+        if (isBinary) {
+            // Just update the latest frame, let the interval handle submission
+            lastFrameBuffer = message;
         }
     });
 

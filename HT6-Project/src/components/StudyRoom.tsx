@@ -657,7 +657,7 @@ export const StudyRoom: React.FC = () => {
             distraction: (currentMood === 'surprise' || currentMood === 'fear') ? 80 : 10,
             struggling: (currentMood === 'anger' || currentMood === 'sadness') ? 85 : 0,
             mood: currentMood,
-            mood_confidence: Math.floor(maxProb * 100) || 100,
+            mood_confidence: Math.floor(maxProb) || 0,
             tiredness: isBlinking ? 80 : 5,
           };
 
@@ -687,7 +687,8 @@ export const StudyRoom: React.FC = () => {
   useEffect(() => {
     if (!documentId || !cameraActive) return;
 
-    // SDK requires >= 20fps, so we send at ~30fps (33ms).
+    // Send frames to Node at a reasonable rate (10fps) to avoid WebSocket overload.
+    // The Node.js server will upsample these to 30fps internally for the SDK.
     const frameInterval = setInterval(() => {
       // Extract frame from video and send over WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN && videoRef.current && canvasRef.current) {
@@ -701,7 +702,7 @@ export const StudyRoom: React.FC = () => {
           wsRef.current.send(imageData.data.buffer);
         }
       }
-    }, 33);
+    }, 100);
 
     const apiInterval = setInterval(() => {
       // Send the latest focusMetrics state to the FastAPI backend
