@@ -24,9 +24,10 @@ interface BunnyProps {
   triggerProjector?: boolean;
   isThinking?: boolean;
   isTalking?: boolean;
+  isDancing?: boolean;
 }
 
-const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinking, isTalking }) => {
+export const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinking, isTalking, isDancing }) => {
   const { scene } = useGLTF('/bunny.glb?v=8');
   const clonedScene = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const modelRef = useRef<THREE.Group>(null);
@@ -42,7 +43,7 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinkin
   const armRBone = useRef<THREE.Bone | null>(null);
   const torsoBone = useRef<THREE.Bone | null>(null);
   const meshRefs = useRef<THREE.SkinnedMesh[]>([]);
-  const jumpState = useRef<'idle' | 'jumping'>('idle');
+  const jumpState = useRef<'idle' | 'jumping' | 'dancing'>('idle');
   const jumpStartTime = useRef(0);
 
   useEffect(() => {
@@ -51,6 +52,14 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinkin
       jumpStartTime.current = 0;
     }
   }, [triggerProjector]);
+
+  useEffect(() => {
+    if (isDancing) {
+      jumpState.current = 'dancing';
+    } else if (jumpState.current === 'dancing') {
+      jumpState.current = 'idle';
+    }
+  }, [isDancing]);
 
   useEffect(() => {
     meshRefs.current = [];
@@ -208,6 +217,20 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinkin
       if (armRBone.current) {
         armRBone.current.position.set(-idleArmPosX, idleArmPosY, 0);
         armRBone.current.rotation.set(idleArmRotX, idleArmRotYR, 0);
+      }
+    } else if (jumpState.current === 'dancing') {
+      if (modelRef.current) modelRef.current.position.y = Math.abs(Math.sin(t * 8)) * 2;
+      if (torsoBone.current) {
+        torsoBone.current.scale.y = 1 + Math.sin(t * 8) * 0.1;
+        torsoBone.current.rotation.z = Math.sin(t * 4) * 0.15;
+      }
+      if (armLBone.current) {
+        armLBone.current.position.set(idleArmPosX, idleArmPosY, 0);
+        armLBone.current.rotation.set(Math.PI * 0.6, 0, Math.sin(t * 10) * 0.5);
+      }
+      if (armRBone.current) {
+        armRBone.current.position.set(-idleArmPosX, idleArmPosY, 0);
+        armRBone.current.rotation.set(Math.PI * 0.6, 0, -Math.sin(t * 10) * 0.5);
       }
     } else if (jumpState.current === 'jumping') {
       if (jumpStartTime.current === 0) jumpStartTime.current = t;
@@ -496,6 +519,14 @@ export const StudyRoom: React.FC = () => {
   const strugglingScoreRef = useRef<number>(0);
   const ttsCacheRef = useRef<Record<string, string>>({});
   
+  const sessionStatsRef = useRef({
+    startTime: Date.now(),
+    distractedFrames: 0,
+    strugglingFrames: 0,
+    totalFrames: 0
+  });
+  
+  const [sessionFinished, setSessionFinished] = useState(false);
   const [isAvatarTalking, setIsAvatarTalking] = useState(false);
 
   // Initialize Web Speech API for live visual feedback
@@ -711,6 +742,10 @@ export const StudyRoom: React.FC = () => {
           isSdkTalkingRef.current = sdkData.talking || false;
 
           setFocusMetrics(updatedMetrics);
+
+          sessionStatsRef.current.totalFrames += 1;
+          if (updatedMetrics.distraction > 50) sessionStatsRef.current.distractedFrames += 1;
+          if (updatedMetrics.struggling > 50) sessionStatsRef.current.strugglingFrames += 1;
 
           if (updatedMetrics.struggling > 50) {
             setAvatarEmotion('sad');
@@ -1028,6 +1063,26 @@ export const StudyRoom: React.FC = () => {
     }
   }, [micActive, mediaStream]);
 
+  const saveSessionStats = () => {
+    const stats = sessionStatsRef.current;
+    const sessionTimeMins = ((Date.now() - stats.startTime) / 60000).toFixed(1);
+    // Presage frames sent roughly at 10fps
+    const distractedSecs = (stats.distractedFrames / 10).toFixed(1);
+    const strugglingSecs = (stats.strugglingFrames / 10).toFixed(1);
+    
+    const newSession = {
+      date: new Date().toLocaleString(),
+      duration: `${sessionTimeMins} min`,
+      distracted: `${distractedSecs} sec`,
+      struggling: `${strugglingSecs} sec`,
+    };
+
+    const existing = JSON.parse(localStorage.getItem('studySessions') || '[]');
+    localStorage.setItem('studySessions', JSON.stringify([...existing, newSession]));
+    
+    navigate('/finished');
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
 
@@ -1049,10 +1104,14 @@ export const StudyRoom: React.FC = () => {
           <QuestProgress documentId={documentId || ''} />
 
         </div>
-
-        <button className="pixel-button" onClick={() => navigate('/home')} style={{ width: '100%', justifyContent: 'center' }}>
-          Leave Room
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="pixel-button" onClick={() => navigate('/home')} style={{ flex: 1, justifyContent: 'center' }}>
+            Leave Room
+          </button>
+          <button className="pixel-button" onClick={saveSessionStats} style={{ flex: 1, justifyContent: 'center', backgroundColor: 'var(--c-sage-dark)', color: 'white' }}>
+            Finish Session
+          </button>
+        </div>
       </div>
 
       {/* 2. Main Area (Zoom layout grid) */}
