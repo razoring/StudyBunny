@@ -245,7 +245,12 @@ const StreamingBubble: React.FC<{ text?: string }> = ({ text }) => {
 
   return (
     <div 
-      onClick={() => setDismissedText(text)}
+      onClick={() => {
+        setDismissedText(text);
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
+      }}
       style={{
         position: 'absolute',
         bottom: '20px',
@@ -305,13 +310,18 @@ export const StudyRoom: React.FC = () => {
   const [avatarEmotion, setAvatarEmotion] = useState<'neutral' | 'angry' | 'sad'>('neutral');
   const [showDebug, setShowDebug] = useState(false);
 
+  const [sessionStartIndex, setSessionStartIndex] = useState<number | null>(null);
+
   // Load chat history & initialize webcam on component mount
   useEffect(() => {
     if (!documentId) return;
 
     // Fetch previous chat history
     api.getChatHistory(documentId)
-      .then((history) => setMessages(history))
+      .then((history) => {
+        setMessages(history);
+        setSessionStartIndex(history.length);
+      })
       .catch((err) => console.error('Error fetching chat history:', err));
 
     // Request Webcam and Microphone permission
@@ -609,7 +619,7 @@ export const StudyRoom: React.FC = () => {
                 </Canvas>
               </div>
 
-              <StreamingBubble text={messages.length > 0 && messages[messages.length - 1].role === 'avatar' ? messages[messages.length - 1].text : undefined} />
+              <StreamingBubble text={sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' ? messages[messages.length - 1].text : undefined} />
 
               {/* Debug Menu & Info Button */}
               <div style={{ position: 'absolute', bottom: '10px', right: '10px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
