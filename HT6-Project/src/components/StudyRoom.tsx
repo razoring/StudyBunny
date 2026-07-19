@@ -167,7 +167,44 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion }) => {
     });
   });
 
-  return <primitive ref={modelRef} object={clonedScene} position={[30, -45, 0]} scale={[12, 12, 12]} />;
+  // Generate an authentic 16x16 pixel art shadow texture
+  const shadowTexture = React.useMemo(() => {
+    const size = 16;
+    const data = new Uint8Array(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const cx = x - size / 2 + 0.5;
+        const cy = y - size / 2 + 0.5;
+        // Ellipse equation for the shadow shape
+        const dist = (cx * cx) / 49 + (cy * cy) / 16;
+        const i = (y * size + x) * 4;
+        if (dist <= 1.2) {
+          data[i] = 20;     // R
+          data[i + 1] = 15; // G
+          data[i + 2] = 30; // B
+          data[i + 3] = 160;// Alpha
+        } else {
+          data[i + 3] = 0;  // Transparent
+        }
+      }
+    }
+    const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+    tex.magFilter = THREE.NearestFilter; // This enforces the chunky pixel look
+    tex.minFilter = THREE.NearestFilter;
+    tex.needsUpdate = true;
+    return tex;
+  }, []);
+
+  return (
+    <group position={[30, -45, 0]}>
+      {/* Pixel art drop shadow using NearestFilter texture */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-30, 0, 0]} scale={[40, 20, 1]}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial map={shadowTexture} transparent depthWrite={false} />
+      </mesh>
+      <primitive ref={modelRef} object={clonedScene} scale={[12, 12, 12]} />
+    </group>
+  );
 };
 
 
@@ -488,7 +525,9 @@ export const StudyRoom: React.FC = () => {
             <div
               style={{
                 flex: 1,
-                backgroundColor: 'var(--c-mint-pale)',
+                backgroundImage: 'url(/board.jpg)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
                 borderRadius: '8px',
                 overflow: 'hidden',
                 border: '2px solid var(--border-color)',
@@ -503,12 +542,12 @@ export const StudyRoom: React.FC = () => {
                     height: '100%',
                     imageRendering: 'pixelated', /* Crucial CSS properties */
                   }}
-                  gl={{ antialias: false }} /* Disable anti-aliasing */
+                  gl={{ antialias: false, alpha: true }} /* Disable anti-aliasing, keep transparent */
                   camera={{ position: [0, 0, 150], fov: 45 }}
                 >
-                  <ambientLight intensity={1.5} />
-                  <directionalLight position={[10, 10, 10]} intensity={1.5} />
-                  <pointLight position={[-10, -10, -10]} intensity={1} />
+                  <ambientLight intensity={0.6} color="#ffffff" />
+                  <directionalLight position={[-20, 30, 20]} intensity={3.5} color="#fff4d4" />
+                  <directionalLight position={[20, -10, 10]} intensity={0.4} color="#8a9cba" />
                   <Suspense fallback={<AvatarLoader />}>
                     <BunnyModel emotion={avatarEmotion} />
                   </Suspense>
