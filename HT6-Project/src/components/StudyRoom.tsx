@@ -494,6 +494,14 @@ export const StudyRoom: React.FC = () => {
   const strugglingScoreRef = useRef<number>(0);
   const ttsCacheRef = useRef<Record<string, string>>({});
   
+  const sessionStatsRef = useRef({
+    startTime: Date.now(),
+    distractedFrames: 0,
+    strugglingFrames: 0,
+    totalFrames: 0
+  });
+  
+  const [sessionFinished, setSessionFinished] = useState(false);
   const [isAvatarTalking, setIsAvatarTalking] = useState(false);
 
   // Initialize Web Speech API for live visual feedback
@@ -709,6 +717,10 @@ export const StudyRoom: React.FC = () => {
           isSdkTalkingRef.current = sdkData.talking || false;
 
           setFocusMetrics(updatedMetrics);
+
+          sessionStatsRef.current.totalFrames += 1;
+          if (updatedMetrics.distraction > 50) sessionStatsRef.current.distractedFrames += 1;
+          if (updatedMetrics.struggling > 50) sessionStatsRef.current.strugglingFrames += 1;
 
           if (updatedMetrics.struggling > 50) {
             setAvatarEmotion('sad');
@@ -1026,6 +1038,48 @@ export const StudyRoom: React.FC = () => {
     }
   }, [micActive, mediaStream]);
 
+  const saveSessionStats = () => {
+    const stats = sessionStatsRef.current;
+    const sessionTimeMins = ((Date.now() - stats.startTime) / 60000).toFixed(1);
+    // Presage frames sent roughly at 10fps
+    const distractedSecs = (stats.distractedFrames / 10).toFixed(1);
+    const strugglingSecs = (stats.strugglingFrames / 10).toFixed(1);
+    
+    const newSession = {
+      date: new Date().toLocaleString(),
+      duration: `${sessionTimeMins} min`,
+      distracted: `${distractedSecs} sec`,
+      struggling: `${strugglingSecs} sec`,
+    };
+
+    const existing = JSON.parse(localStorage.getItem('studySessions') || '[]');
+    localStorage.setItem('studySessions', JSON.stringify([...existing, newSession]));
+    
+    setSessionFinished(true);
+  };
+
+  if (sessionFinished) {
+    const history = JSON.parse(localStorage.getItem('studySessions') || '[]');
+    return (
+      <div style={{ padding: '40px', fontFamily: 'var(--font-cozy)', backgroundColor: 'var(--bg-primary)', height: '100vh', overflowY: 'auto' }}>
+        <h1 style={{ fontFamily: 'var(--font-retro)', color: 'var(--c-brown-dark)' }}>Session Finished! 🎉</h1>
+        <p>Great job! Here is your study history across all sessions:</p>
+        <button className="pixel-button" onClick={() => navigate('/home')} style={{ marginBottom: '20px' }}>Go Home</button>
+        <div style={{ display: 'grid', gap: '15px' }}>
+          {history.map((s: any, i: number) => (
+            <div key={i} className="pixel-panel" style={{ backgroundColor: 'white', color: 'black' }}>
+              <h3 style={{ margin: '0 0 10px 0' }}>{s.date}</h3>
+              <p><strong>Total Time:</strong> {s.duration}</p>
+              <p><strong>Time Distracted:</strong> {s.distracted}</p>
+              <p><strong>Time Struggling:</strong> {s.struggling}</p>
+              <p><strong>Notes:</strong> Keep practicing the topics you spent the most time struggling on!</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
 
@@ -1047,10 +1101,14 @@ export const StudyRoom: React.FC = () => {
           <QuestProgress documentId={documentId || ''} />
 
         </div>
-
-        <button className="pixel-button" onClick={() => navigate('/home')} style={{ width: '100%', justifyContent: 'center' }}>
-          Leave Room
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="pixel-button" onClick={() => navigate('/home')} style={{ flex: 1, justifyContent: 'center' }}>
+            Leave Room
+          </button>
+          <button className="pixel-button" onClick={saveSessionStats} style={{ flex: 1, justifyContent: 'center', backgroundColor: 'var(--c-sage-dark)', color: 'white' }}>
+            Finish Session
+          </button>
+        </div>
       </div>
 
       {/* 2. Main Area (Zoom layout grid) */}
