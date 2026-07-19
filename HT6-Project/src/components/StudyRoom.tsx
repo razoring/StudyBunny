@@ -513,21 +513,22 @@ export const StudyRoom: React.FC = () => {
   const hideBubbleTimerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
   const isSdkTalkingRef = useRef<boolean>(false);
-  
+
   // Accumulator tracking for spontaneous interaction (frame counts)
   const distractionScoreRef = useRef<number>(0);
   const strugglingScoreRef = useRef<number>(0);
   const ttsCacheRef = useRef<Record<string, string>>({});
-  
+
   const sessionStatsRef = useRef({
     startTime: Date.now(),
     distractedFrames: 0,
     strugglingFrames: 0,
     totalFrames: 0
   });
-  
+
   const [sessionFinished, setSessionFinished] = useState(false);
   const [isAvatarTalking, setIsAvatarTalking] = useState(false);
+  const isAvatarTalkingRef = useRef<boolean>(false);
 
   // Initialize Web Speech API for live visual feedback
   useEffect(() => {
@@ -844,8 +845,8 @@ export const StudyRoom: React.FC = () => {
     }, 5000);
 
     return () => {
-        clearInterval(frameInterval);
-        clearInterval(apiInterval);
+      clearInterval(frameInterval);
+      clearInterval(apiInterval);
     };
   }, [documentId, cameraActive]);
 
@@ -876,7 +877,7 @@ export const StudyRoom: React.FC = () => {
     if (!ttsActive) return;
     try {
       let url = ttsCacheRef.current[textToSpeak];
-      
+
       if (!url) {
         const ttsRes = await fetch('http://localhost:8000/chat/tts', {
           method: 'POST',
@@ -894,10 +895,10 @@ export const StudyRoom: React.FC = () => {
       }
 
       const audio = new Audio(url);
-      
-      audio.onplay = () => setIsAvatarTalking(true);
-      audio.onended = () => setIsAvatarTalking(false);
-      audio.onpause = () => setIsAvatarTalking(false);
+
+      audio.onplay = () => { setIsAvatarTalking(true); isAvatarTalkingRef.current = true; };
+      audio.onended = () => { setIsAvatarTalking(false); isAvatarTalkingRef.current = false; };
+      audio.onpause = () => { setIsAvatarTalking(false); isAvatarTalkingRef.current = false; };
 
       if (currentAudioRef.current) {
         currentAudioRef.current.pause();
@@ -1028,7 +1029,7 @@ export const StudyRoom: React.FC = () => {
             if (!silenceTimerRef.current) {
               silenceTimerRef.current = setTimeout(() => {
                 isSpeakingRef.current = false;
-                
+
                 // Keep the bubble alive for a few more seconds before hiding
                 hideBubbleTimerRef.current = setTimeout(() => {
                   setIsUserSpeaking(false);
@@ -1074,7 +1075,7 @@ export const StudyRoom: React.FC = () => {
     // Presage frames sent roughly at 10fps
     const distractedSecs = (stats.distractedFrames / 10).toFixed(1);
     const strugglingSecs = (stats.strugglingFrames / 10).toFixed(1);
-    
+
     const newSession = {
       date: new Date().toLocaleString(),
       duration: `${sessionTimeMins} min`,
@@ -1084,7 +1085,7 @@ export const StudyRoom: React.FC = () => {
 
     const existing = JSON.parse(localStorage.getItem('studySessions') || '[]');
     localStorage.setItem('studySessions', JSON.stringify([...existing, newSession]));
-    
+
     navigate('/finished');
   };
 
@@ -1150,30 +1151,30 @@ export const StudyRoom: React.FC = () => {
 
             {/* A/V Control Buttons inside feed */}
             <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-            <button
-              className="pixel-button"
-              onClick={toggleCamera}
-              style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <img src={cameraIcon} alt="" style={{ width: '16px', height: '16px' }} />
-              {cameraActive ? 'Stop Video' : 'Start Video'}
-            </button>
-            <button
-              className="pixel-button"
-              onClick={toggleMic}
-              style={{
-                flex: 1,
-                justifyContent: 'center',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: micActive ? 'var(--c-peach)' : 'var(--c-coral)',
-              }}
-            >
-              <img src={micIcon} alt="" style={{ width: '16px', height: '16px' }} />
-              {micActive ? 'Mute' : 'Unmute'}
-            </button>
-          </div>
+              <button
+                className="pixel-button"
+                onClick={toggleCamera}
+                style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <img src={cameraIcon} alt="" style={{ width: '16px', height: '16px' }} />
+                {cameraActive ? 'Stop Video' : 'Start Video'}
+              </button>
+              <button
+                className="pixel-button"
+                onClick={toggleMic}
+                style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: micActive ? 'var(--c-peach)' : 'var(--c-coral)',
+                }}
+              >
+                <img src={micIcon} alt="" style={{ width: '16px', height: '16px' }} />
+                {micActive ? 'Mute' : 'Unmute'}
+              </button>
+            </div>
 
 
           </div>
@@ -1349,6 +1350,7 @@ export const StudyRoom: React.FC = () => {
                       currentAudioRef.current.currentTime = 0;
                     }
                     setIsAvatarTalking(false);
+                    isAvatarTalkingRef.current = false;
                   }}
                 />
               )}
