@@ -1,11 +1,16 @@
 import React, { useEffect, useRef, useState, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useGLTF, Center } from '@react-three/drei';
+import { useGLTF, Center, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
 import { api } from '../services/api';
 import type { ChatMessage, FocusEvent } from '../services/api';
+
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 // working
 import QuestProgress from '../components/QuestBar';
@@ -215,6 +220,60 @@ const AvatarLoader = () => (
     <meshBasicMaterial color="gray" wireframe />
   </mesh>
 );
+
+// --- Streaming Speech Bubble Component ---
+const StreamingBubble: React.FC<{ text?: string }> = ({ text }) => {
+  const [displayed, setDisplayed] = useState('');
+  const [dismissedText, setDismissedText] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!text) {
+      setDisplayed('');
+      return;
+    }
+    let i = 0;
+    setDisplayed('');
+    const interval = setInterval(() => {
+      setDisplayed(text.substring(0, i));
+      i++;
+      if (i > text.length) clearInterval(interval);
+    }, 15);
+    return () => clearInterval(interval);
+  }, [text]);
+
+  if (!text || text === dismissedText) return null;
+
+  return (
+    <div 
+      onClick={() => setDismissedText(text)}
+      style={{
+        position: 'absolute',
+        bottom: '20px',
+        left: '20px',
+        right: '20px',
+        maxHeight: '40%',
+        backgroundColor: 'white',
+        border: '4px solid black',
+        padding: '16px 20px',
+        color: 'black',
+        fontFamily: 'var(--font-retro)',
+        fontSize: '1.2rem',
+        lineHeight: '1.5',
+        overflowY: 'auto',
+        boxShadow: '4px 4px 0px rgba(0,0,0,0.2)',
+        zIndex: 10,
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{ position: 'absolute', top: '8px', right: '12px', fontSize: '0.75rem', color: '#999', fontWeight: 'bold' }}>Click to dismiss</div>
+      <div className="markdown-content" style={{ margin: 0, marginTop: '8px' }}>
+        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+          {displayed}
+        </ReactMarkdown>
+      </div>
+    </div>
+  );
+};
 
 // --- Main Study Room Component ---
 export const StudyRoom: React.FC = () => {
@@ -549,6 +608,8 @@ export const StudyRoom: React.FC = () => {
                   </Suspense>
                 </Canvas>
               </div>
+
+              <StreamingBubble text={messages.length > 0 && messages[messages.length - 1].role === 'avatar' ? messages[messages.length - 1].text : undefined} />
 
               {/* Debug Menu & Info Button */}
               <div style={{ position: 'absolute', bottom: '10px', right: '10px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
