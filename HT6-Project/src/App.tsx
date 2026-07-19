@@ -6,6 +6,7 @@ import { LoginPage } from './components/LoginPage';
 import { SignUpPage } from './components/SignUpPage';
 import { PlanDevelopment } from './components/PlanDevelopment';
 import { StudyRoom } from './components/StudyRoom';
+import { SessionFinished } from './components/SessionFinished';
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -60,6 +61,14 @@ function App() {
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
               <StudyRoom />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/finished"
+          element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <SessionFinished />
             </ProtectedRoute>
           }
         />

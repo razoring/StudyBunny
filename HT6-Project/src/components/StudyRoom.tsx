@@ -22,9 +22,10 @@ interface BunnyProps {
   triggerProjector?: boolean;
   isThinking?: boolean;
   isTalking?: boolean;
+  isDancing?: boolean;
 }
 
-const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinking, isTalking }) => {
+export const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinking, isTalking, isDancing }) => {
   const { scene } = useGLTF('/bunny.glb?v=8');
   const clonedScene = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const modelRef = useRef<THREE.Group>(null);
@@ -40,7 +41,7 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinkin
   const armRBone = useRef<THREE.Bone | null>(null);
   const torsoBone = useRef<THREE.Bone | null>(null);
   const meshRefs = useRef<THREE.SkinnedMesh[]>([]);
-  const jumpState = useRef<'idle' | 'jumping'>('idle');
+  const jumpState = useRef<'idle' | 'jumping' | 'dancing'>('idle');
   const jumpStartTime = useRef(0);
 
   useEffect(() => {
@@ -49,6 +50,14 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinkin
       jumpStartTime.current = 0;
     }
   }, [triggerProjector]);
+
+  useEffect(() => {
+    if (isDancing) {
+      jumpState.current = 'dancing';
+    } else if (jumpState.current === 'dancing') {
+      jumpState.current = 'idle';
+    }
+  }, [isDancing]);
 
   useEffect(() => {
     meshRefs.current = [];
@@ -206,6 +215,20 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector, isThinkin
       if (armRBone.current) {
         armRBone.current.position.set(-idleArmPosX, idleArmPosY, 0);
         armRBone.current.rotation.set(idleArmRotX, idleArmRotYR, 0);
+      }
+    } else if (jumpState.current === 'dancing') {
+      if (modelRef.current) modelRef.current.position.y = Math.abs(Math.sin(t * 8)) * 2;
+      if (torsoBone.current) {
+        torsoBone.current.scale.y = 1 + Math.sin(t * 8) * 0.1;
+        torsoBone.current.rotation.z = Math.sin(t * 4) * 0.15;
+      }
+      if (armLBone.current) {
+        armLBone.current.position.set(idleArmPosX, idleArmPosY, 0);
+        armLBone.current.rotation.set(Math.PI * 0.6, 0, Math.sin(t * 10) * 0.5);
+      }
+      if (armRBone.current) {
+        armRBone.current.position.set(-idleArmPosX, idleArmPosY, 0);
+        armRBone.current.rotation.set(Math.PI * 0.6, 0, -Math.sin(t * 10) * 0.5);
       }
     } else if (jumpState.current === 'jumping') {
       if (jumpStartTime.current === 0) jumpStartTime.current = t;
@@ -1055,30 +1078,8 @@ export const StudyRoom: React.FC = () => {
     const existing = JSON.parse(localStorage.getItem('studySessions') || '[]');
     localStorage.setItem('studySessions', JSON.stringify([...existing, newSession]));
     
-    setSessionFinished(true);
+    navigate('/finished');
   };
-
-  if (sessionFinished) {
-    const history = JSON.parse(localStorage.getItem('studySessions') || '[]');
-    return (
-      <div style={{ padding: '40px', fontFamily: 'var(--font-cozy)', backgroundColor: 'var(--bg-primary)', height: '100vh', overflowY: 'auto' }}>
-        <h1 style={{ fontFamily: 'var(--font-retro)', color: 'var(--c-brown-dark)' }}>Session Finished! 🎉</h1>
-        <p>Great job! Here is your study history across all sessions:</p>
-        <button className="pixel-button" onClick={() => navigate('/home')} style={{ marginBottom: '20px' }}>Go Home</button>
-        <div style={{ display: 'grid', gap: '15px' }}>
-          {history.map((s: any, i: number) => (
-            <div key={i} className="pixel-panel" style={{ backgroundColor: 'white', color: 'black' }}>
-              <h3 style={{ margin: '0 0 10px 0' }}>{s.date}</h3>
-              <p><strong>Total Time:</strong> {s.duration}</p>
-              <p><strong>Time Distracted:</strong> {s.distracted}</p>
-              <p><strong>Time Struggling:</strong> {s.struggling}</p>
-              <p><strong>Notes:</strong> Keep practicing the topics you spent the most time struggling on!</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
