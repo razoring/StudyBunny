@@ -163,23 +163,29 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector }) => {
       headBone.current.rotation.z = Math.cos(t * 0.6) * 0.02;
     }
 
-    const idleArmX = Math.PI * 0.35; // Pitch forward slightly to avoid pointing backward
-    const idleArmYL = Math.PI * 0.9;  // Flare outward to avoid clipping in torso
-    const idleArmYR = -Math.PI * 0.9; // Flare outward
+    const idleArmPosX = 1.2;
+    const idleArmPosY = 2;
+    const idleArmRotX = Math.PI * 1; // Straight down at sides
+    const idleArmRotYL = -Math.PI * 0.5;
+    const idleArmRotYR = Math.PI * 0.5;
+
+    const grabArmPosX = 0.6;
+    const grabArmPosY = 2.0;
+    const grabArmRotX = Math.PI * 0.4; // T-rex grab pose
+    const grabArmRotYL = Math.PI * 0.2;
+    const grabArmRotYR = -Math.PI * 0.2;
 
     // Body idle movement & Jump animation
     if (jumpState.current === 'idle') {
       if (torsoBone.current) torsoBone.current.scale.y = 1 + Math.sin(t * 2) * 0.02;
       if (modelRef.current) modelRef.current.position.y = 0;
       if (armLBone.current) {
-        armLBone.current.rotation.x = idleArmX;
-        armLBone.current.rotation.y = idleArmYL;
-        armLBone.current.rotation.z = 0;
+        armLBone.current.position.set(idleArmPosX, idleArmPosY, 0);
+        armLBone.current.rotation.set(idleArmRotX, idleArmRotYL, 0);
       }
       if (armRBone.current) {
-        armRBone.current.rotation.x = idleArmX;
-        armRBone.current.rotation.y = idleArmYR;
-        armRBone.current.rotation.z = 0;
+        armRBone.current.position.set(-idleArmPosX, idleArmPosY, 0);
+        armRBone.current.rotation.set(idleArmRotX, idleArmRotYR, 0);
       }
     } else if (jumpState.current === 'jumping') {
       if (jumpStartTime.current === 0) jumpStartTime.current = t;
@@ -190,28 +196,56 @@ const BunnyModel: React.FC<BunnyProps> = ({ emotion, triggerProjector }) => {
         const progress = jt / 0.3;
         if (modelRef.current) modelRef.current.position.y = THREE.MathUtils.lerp(0, 20, progress);
         if (armLBone.current) {
-          armLBone.current.rotation.x = THREE.MathUtils.lerp(idleArmX, -Math.PI * 0.8, progress); // Pitch forward/up
-          armLBone.current.rotation.y = THREE.MathUtils.lerp(idleArmYL, Math.PI * 0.2, progress);  // Outward flare
-          armLBone.current.rotation.z = 0;
+          armLBone.current.position.set(
+            THREE.MathUtils.lerp(idleArmPosX, grabArmPosX, progress),
+            THREE.MathUtils.lerp(idleArmPosY, grabArmPosY, progress),
+            0
+          );
+          armLBone.current.rotation.set(
+            THREE.MathUtils.lerp(idleArmRotX, grabArmRotX, progress),
+            THREE.MathUtils.lerp(idleArmRotYL, grabArmRotYL, progress),
+            0
+          );
         }
         if (armRBone.current) {
-          armRBone.current.rotation.x = THREE.MathUtils.lerp(idleArmX, -Math.PI * 0.8, progress); // Pitch forward/up
-          armRBone.current.rotation.y = THREE.MathUtils.lerp(idleArmYR, -Math.PI * 0.2, progress); // Outward flare
-          armRBone.current.rotation.z = 0;
+          armRBone.current.position.set(
+            THREE.MathUtils.lerp(-idleArmPosX, -grabArmPosX, progress),
+            THREE.MathUtils.lerp(idleArmPosY, grabArmPosY, progress),
+            0
+          );
+          armRBone.current.rotation.set(
+            THREE.MathUtils.lerp(idleArmRotX, grabArmRotX, progress),
+            THREE.MathUtils.lerp(idleArmRotYR, grabArmRotYR, progress),
+            0
+          );
         }
       } else if (jt < 0.6) {
         // falling down
         const progress = (jt - 0.3) / 0.3;
         if (modelRef.current) modelRef.current.position.y = THREE.MathUtils.lerp(20, 0, progress);
         if (armLBone.current) {
-          armLBone.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.8, idleArmX, progress);
-          armLBone.current.rotation.y = THREE.MathUtils.lerp(Math.PI * 0.2, idleArmYL, progress);
-          armLBone.current.rotation.z = 0;
+          armLBone.current.position.set(
+            THREE.MathUtils.lerp(grabArmPosX, idleArmPosX, progress),
+            THREE.MathUtils.lerp(grabArmPosY, idleArmPosY, progress),
+            0
+          );
+          armLBone.current.rotation.set(
+            THREE.MathUtils.lerp(grabArmRotX, idleArmRotX, progress),
+            THREE.MathUtils.lerp(grabArmRotYL, idleArmRotYL, progress),
+            0
+          );
         }
         if (armRBone.current) {
-          armRBone.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.8, idleArmX, progress);
-          armRBone.current.rotation.y = THREE.MathUtils.lerp(-Math.PI * 0.2, idleArmYR, progress);
-          armRBone.current.rotation.z = 0;
+          armRBone.current.position.set(
+            THREE.MathUtils.lerp(-grabArmPosX, -idleArmPosX, progress),
+            THREE.MathUtils.lerp(grabArmPosY, idleArmPosY, progress),
+            0
+          );
+          armRBone.current.rotation.set(
+            THREE.MathUtils.lerp(grabArmRotX, idleArmRotX, progress),
+            THREE.MathUtils.lerp(grabArmRotYR, idleArmRotYR, progress),
+            0
+          );
         }
       } else {
         jumpState.current = 'idle';
