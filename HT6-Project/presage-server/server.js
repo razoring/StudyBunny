@@ -74,6 +74,9 @@ try {
     console.error("Failed to initialize Presage SDK:", e);
 }
 
+let syntheticTimestampUs = 0;
+let lastFrameTime = 0;
+
 wss.on('connection', (ws) => {
     console.log('React Client connected to Presage Server.');
 
@@ -84,9 +87,16 @@ wss.on('connection', (ws) => {
                 const width = 640;
                 const height = 480;
                 const stride = width * 4;
-                const timestampUs = Date.now() * 1000;
                 
-                sdk.sendFrame(message, width, height, stride, PixelFormat.kRGBA, timestampUs);
+                const now = Date.now();
+                if (lastFrameTime === 0 || (now - lastFrameTime) > 1000) {
+                    syntheticTimestampUs += 33000; // Cap gap to ~30fps equivalent if delayed
+                } else {
+                    syntheticTimestampUs += (now - lastFrameTime) * 1000;
+                }
+                lastFrameTime = now;
+                
+                sdk.sendFrame(message, width, height, stride, PixelFormat.kRGBA, syntheticTimestampUs);
             } catch (error) {
                 console.error("Error sending frame to SDK:", error);
             }

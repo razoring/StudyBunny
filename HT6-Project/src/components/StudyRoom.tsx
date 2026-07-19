@@ -687,7 +687,8 @@ export const StudyRoom: React.FC = () => {
   useEffect(() => {
     if (!documentId || !cameraActive) return;
 
-    const interval = setInterval(() => {
+    // SDK requires >= 20fps, so we send at ~30fps (33ms).
+    const frameInterval = setInterval(() => {
       // Extract frame from video and send over WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN && videoRef.current && canvasRef.current) {
         const video = videoRef.current;
@@ -700,18 +701,22 @@ export const StudyRoom: React.FC = () => {
           wsRef.current.send(imageData.data.buffer);
         }
       }
+    }, 33);
 
-      // Also send the latest focusMetrics state to the FastAPI backend
+    const apiInterval = setInterval(() => {
+      // Send the latest focusMetrics state to the FastAPI backend
       setFocusMetrics(prevMetrics => {
         if (prevMetrics) {
           api.sendFocusEvent(prevMetrics).catch((err) => console.error('Error posting focus metrics:', err));
         }
         return prevMetrics;
       });
-
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+        clearInterval(frameInterval);
+        clearInterval(apiInterval);
+    };
   }, [documentId, cameraActive]);
 
   // Handle camera toggle
@@ -809,6 +814,7 @@ export const StudyRoom: React.FC = () => {
   // VAD Mic Audio Capture for Whisper
   useEffect(() => {
     if (micActive && mediaStream) {
+      let isCancelled = false;
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
@@ -852,6 +858,7 @@ export const StudyRoom: React.FC = () => {
               if (e.data.size > 0) audioChunksRef.current.push(e.data);
             };
             mediaRecorderRef.current.onstop = async () => {
+              if (isCancelled) return; // Do not send audio if muted or unmounted
               const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
               const formData = new FormData();
               formData.append('file', audioBlob, 'speech.webm');
@@ -902,11 +909,21 @@ export const StudyRoom: React.FC = () => {
       checkVolume();
 
       return () => {
+        isCancelled = true;
         cancelAnimationFrame(recordingInterval);
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           mediaRecorderRef.current.stop();
         }
+        if (recognitionRef.current) {
+          try { recognitionRef.current.stop(); } catch (e) { }
+        }
+        setIsUserSpeaking(false);
       };
+    } else {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) { }
+      }
+      setIsUserSpeaking(false);
     }
   }, [micActive, mediaStream]);
 
@@ -1136,6 +1153,13 @@ export const StudyRoom: React.FC = () => {
                 <StreamingBubble
                   text={sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' ? messages[messages.length - 1].text : undefined}
                   isProjector={sessionStartIndex !== null && messages.length > 0 && messages.length - 1 >= sessionStartIndex && messages[messages.length - 1].role === 'avatar' && messages[messages.length - 1].text.length > maxProjectorChars}
+                  onDismiss={() => {
+                    if (currentAudioRef.current && !currentAudioRef.current.paused) {
+                      currentAudioRef.current.pause();
+                      currentAudioRef.current.currentTime = 0;
+                    }
+                    setIsAvatarTalking(false);
+                  }}
                 />
               )}
 
