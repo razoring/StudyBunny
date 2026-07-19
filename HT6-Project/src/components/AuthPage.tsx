@@ -1,4 +1,7 @@
 import { Link } from 'react-router-dom';
+import authBg from '../assets/bg3.jpg';
+
+
 
 type AuthPageProps = {
   title: string;
@@ -20,7 +23,7 @@ export function AuthPage({
   alternateActionLabel,
 }: AuthPageProps) {
   return (
-    <div className="auth-scene">
+    <div className="auth-scene" style={{ backgroundImage: `url(${authBg})` }}>
       <main className="pixel-panel auth-card" aria-label={title}>
         {logoSrc ? (
           <img

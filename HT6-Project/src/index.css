@@ -109,12 +109,14 @@ body {
 }
 
 .auth-scene {
-  height: 100vh;      /* was min-height: 100vh */
+  height: 100vh;
   position: relative;
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: rgba(244, 232, 180, 0.96);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 /* .auth-scene::before {
