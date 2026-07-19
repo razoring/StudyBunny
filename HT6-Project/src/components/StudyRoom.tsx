@@ -244,6 +244,7 @@ export const StudyRoom: React.FC = () => {
 
   // Avatar states
   const [avatarEmotion, setAvatarEmotion] = useState<'neutral' | 'angry' | 'sad'>('neutral');
+  const [showDebug, setShowDebug] = useState(false);
 
   // Load chat history & initialize webcam on component mount
   useEffect(() => {
@@ -472,7 +473,7 @@ export const StudyRoom: React.FC = () => {
       </div>
 
       {/* 2. Main Area (Zoom layout grid) */}
-      <div style={{ display: 'grid', gridTemplateRows: '1fr 240px', overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateRows: '1fr 50px', overflow: 'hidden' }}>
         
         {/* Top Grid: Camera Feeds */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', padding: '20px', overflow: 'hidden' }}>
@@ -507,12 +508,7 @@ export const StudyRoom: React.FC = () => {
               </button>
             </div>
 
-            {/* Tracking overlay */}
-            <div style={{ display: 'flex', justifyContent: 'space-around', backgroundColor: 'var(--c-sand-light)', border: '2px solid var(--border-color)', borderRadius: '6px', padding: '6px', marginTop: '10px', fontSize: '0.8rem', fontWeight: 800 }}>
-              <div>Focus: <span style={{ color: focusMetrics.focus > 70 ? 'var(--c-sage-dark)' : 'var(--c-burnt-orange)' }}>{focusMetrics.focus}%</span></div>
-              <div>Stress/Tiredness: <span>{focusMetrics.tiredness}%</span></div>
-              <div>Mood: <span style={{ textTransform: 'capitalize' }}>{focusMetrics.mood}</span></div>
-            </div>
+
           </div>
 
           {/* 3D Bunny Avatar Box */}
@@ -554,72 +550,39 @@ export const StudyRoom: React.FC = () => {
                 </Canvas>
               </div>
 
-              {/* Expressive HUD */}
-              <div style={{ position: 'absolute', bottom: '10px', right: '10px', backgroundColor: 'var(--c-brown-dark)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 800 }}>
-                Status: {avatarEmotion === 'angry' ? 'Stern 💢' : avatarEmotion === 'sad' ? 'Concerned 😟' : 'Happy 😊'}
+              {/* Debug Menu & Info Button */}
+              <div style={{ position: 'absolute', bottom: '10px', right: '10px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                {showDebug && (
+                  <div style={{ backgroundColor: 'var(--c-brown-dark)', color: 'white', padding: '10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 800, border: '2px solid var(--c-sand-light)' }}>
+                    <div style={{ marginBottom: '4px' }}>Focus: <span style={{ color: focusMetrics.focus > 70 ? 'var(--c-sage-dark)' : 'var(--c-burnt-orange)' }}>{focusMetrics.focus}%</span></div>
+                    <div style={{ marginBottom: '4px' }}>Stress/Tiredness: <span>{focusMetrics.tiredness}%</span></div>
+                    <div style={{ marginBottom: '4px' }}>User Mood: <span style={{ textTransform: 'capitalize' }}>{focusMetrics.mood}</span></div>
+                    <div>Tutor Status: {avatarEmotion === 'angry' ? 'Stern 💢' : avatarEmotion === 'sad' ? 'Concerned 😟' : 'Happy 😊'}</div>
+                  </div>
+                )}
+                <button 
+                  onClick={() => setShowDebug(!showDebug)} 
+                  style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'var(--c-brown-dark)', color: 'white', border: '2px solid var(--c-sand-light)', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontFamily: 'var(--font-retro)' }}
+                  title="Debug Info"
+                >
+                  i
+                </button>
               </div>
             </div>
           </div>
 
         </div>
 
-        {/* Bottom Panel: Chat Log */}
+        {/* Bottom Panel: Text Input */}
         <div
           style={{
             borderTop: 'var(--border-thick)',
             backgroundColor: 'var(--bg-panel)',
-            display: 'grid',
-            gridTemplateRows: '1fr 50px',
             overflow: 'hidden',
           }}
         >
-          {/* Scrollable messages area */}
-          <div style={{ overflowY: 'auto', padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {messages.length === 0 ? (
-              <div style={{ color: 'var(--c-sand-med)', textAlign: 'center', marginTop: '20px' }}>
-                Ask your tutor anything about the uploaded document material!
-              </div>
-            ) : (
-              messages.map((m, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
-                  }}
-                >
-                  <div
-                    style={{
-                      maxWidth: '70%',
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      border: '2px solid var(--border-color)',
-                      backgroundColor: m.role === 'user' ? 'var(--c-mint-bright)' : 'var(--c-peach)',
-                      color: 'var(--c-brown-dark)',
-                      fontWeight: 700,
-                      boxShadow: '2px 2px 0px var(--border-color)',
-                      fontSize: '0.95rem',
-                    }}
-                  >
-                    <div style={{ fontSize: '0.75rem', color: 'var(--c-sand-dark)', marginBottom: '3px' }}>
-                      {m.role === 'user' ? 'You' : 'Bunny Tutor'}
-                    </div>
-                    {m.text}
-                  </div>
-                </div>
-              ))
-            )}
-            {sendingMsg && (
-              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <div style={{ backgroundColor: 'var(--c-peach)', padding: '10px 14px', borderRadius: '12px', border: '2px solid var(--border-color)', fontWeight: 700 }}>
-                  Tutor is typing...
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Text Input Row */}
-          <form onSubmit={handleSendMessage} style={{ display: 'flex', borderTop: '2px solid var(--border-color)' }}>
+          <form onSubmit={handleSendMessage} style={{ display: 'flex', height: '100%' }}>
             <input
               type="text"
               value={chatInput}
