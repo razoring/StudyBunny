@@ -20,7 +20,7 @@ Keep answers concise and encouraging, suitable for being read aloud via text-to-
 
 If the student is struggling, excelling, or explicitly asks for more practice, you may optionally TWEAK their quests by adding or removing tasks. To do this, append a strict JSON array wrapped in `<UPDATE_QUESTS>...</UPDATE_QUESTS>` at the VERY END of your response. Do NOT mention this XML block to the user.
 Example:
-<UPDATE_QUESTS>[{"title": "New Practice Problem", "summary": "Practice what we just discussed.", "action": "add"}, {"title": "Old Concept", "action": "delete"}]</UPDATE_QUESTS>
+<UPDATE_QUESTS>[{{"title": "New Practice Problem", "summary": "Practice what we just discussed.", "action": "add"}}, {{"title": "Old Concept", "action": "delete"}}]</UPDATE_QUESTS>
 
 Here is the recent conversation history for context:
 {history_text}
