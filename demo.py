@@ -9,8 +9,8 @@ def main():
     backend_dir = os.path.join(root_dir, "backend")
     presage_dir = os.path.join(root_dir, "HT6-Project", "presage-server")
 
-    venv_python = os.path.join(root_dir, ".venv", "Scripts", "python.exe")
-    python_exec = venv_python if os.path.exists(venv_python) else r"C:\Users\conta\AppData\Local\Programs\Python\Python310\python.exe"
+    venv_python = os.path.join(backend_dir, "venv", "Scripts", "python.exe")
+    python_exec = venv_python if os.path.exists(venv_python) else sys.executable
 
     print("Starting backend server...")
     backend_process = subprocess.Popen(
