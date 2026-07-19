@@ -105,11 +105,12 @@ body {
   font-size: 3rem;
   letter-spacing: 1px;
   color: white;
-  text-shadow: 2px 2px 0px #383140;
+  text-shadow: 2px 2px 0px #6f342d;
 }
 
 .auth-scene {
-  height: 100vh;      /* was min-height: 100vh */
+  height: 100vh;
+  /* was min-height: 100vh */
   position: relative;
   display: grid;
   place-items: center;
@@ -190,8 +191,10 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 1rem;
-  padding: 1.5rem 2rem;   /* reduced from 3.2rem 2rem 2rem */
-  margin-top: 0;          /* removed the extra 3rem push */
+  padding: 1.5rem 2rem;
+  /* reduced from 3.2rem 2rem 2rem */
+  margin-top: 0;
+  /* removed the extra 3rem push */
 }
 
 .auth-title {
