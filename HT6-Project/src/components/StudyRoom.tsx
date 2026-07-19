@@ -486,6 +486,12 @@ export const StudyRoom: React.FC = () => {
   const silenceTimerRef = useRef<any>(null);
   const hideBubbleTimerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
+  
+  // Timers and cache for spontaneous interaction
+  const distractionTimerRef = useRef<number | null>(null);
+  const strugglingTimerRef = useRef<number | null>(null);
+  const ttsCacheRef = useRef<Record<string, string>>({});
+  
   const [isAvatarTalking, setIsAvatarTalking] = useState(false);
 
   // Initialize Web Speech API for live visual feedback
@@ -641,11 +647,26 @@ export const StudyRoom: React.FC = () => {
           let maxProb = 0;
 
           if (sdkData.expressions) {
+            let maxNonNeutralProb = 0;
+            let maxNonNeutralMood = 'neutral';
+
             for (const [expr, prob] of Object.entries(sdkData.expressions)) {
+              if (expr !== 'neutral' && (prob as number) > maxNonNeutralProb) {
+                maxNonNeutralProb = prob as number;
+                maxNonNeutralMood = expr;
+              }
               if ((prob as number) > maxProb) {
                 maxProb = prob as number;
-                currentMood = expr;
               }
+            }
+
+            // 'Neutral' is mathematically dominant in most SDKs unless a face is heavily contorted.
+            // By overriding it if a non-neutral emotion crosses a 35% threshold, we make the
+            // avatar respond instantly to subtle micro-expressions.
+            if (maxNonNeutralProb > 35) {
+              currentMood = maxNonNeutralMood;
+            } else {
+              currentMood = 'neutral';
             }
           }
 
@@ -654,8 +675,10 @@ export const StudyRoom: React.FC = () => {
             user_id: 'mock_user_123',
             document_id: documentId || '',
             focus: (currentMood === 'happiness' || currentMood === 'neutral') ? 90 : 40,
-            distraction: (currentMood === 'surprise' || currentMood === 'fear') ? 80 : 10,
-            struggling: (currentMood === 'anger' || currentMood === 'sadness') ? 85 : 0,
+            // Surprise or disgust maps to distraction (losing focus on the study material)
+            distraction: (currentMood === 'surprise' || currentMood === 'disgust') ? 80 : 10,
+            // Anger, sadness, and fear map to struggling
+            struggling: (currentMood === 'anger' || currentMood === 'sadness' || currentMood === 'fear') ? 85 : 0,
             mood: currentMood,
             mood_confidence: Math.floor(maxProb) || 0,
             tiredness: isBlinking ? 80 : 5,
@@ -665,9 +688,55 @@ export const StudyRoom: React.FC = () => {
 
           if (updatedMetrics.struggling > 50) {
             setAvatarEmotion('sad');
-          } else if (updatedMetrics.distraction > 50) {
-            setAvatarEmotion('angry');
+            if (!strugglingTimerRef.current) {
+              strugglingTimerRef.current = window.setTimeout(() => {
+                if (currentAudioRef.current?.paused ?? true) {
+                  const msgs = [
+                    "Do you need any help with this material?",
+                    "You look a bit confused. Want me to explain it differently?",
+                    "If this is too difficult, we can break it down into smaller steps."
+                  ];
+                  const msg = msgs[Math.floor(Math.random() * msgs.length)];
+                  const tempAvatarMsg: ChatMessage = { id: Math.random().toString(), quest_id: '', role: 'avatar', text: msg, created_at: new Date().toISOString() };
+                  setMessages(prev => [...prev, tempAvatarMsg]);
+                  playTTS(msg);
+                }
+                strugglingTimerRef.current = null;
+              }, 5000);
+            }
           } else {
+            if (strugglingTimerRef.current) {
+              clearTimeout(strugglingTimerRef.current);
+              strugglingTimerRef.current = null;
+            }
+          }
+
+          if (updatedMetrics.distraction > 50) {
+            setAvatarEmotion('angry');
+            if (!distractionTimerRef.current) {
+              distractionTimerRef.current = window.setTimeout(() => {
+                if (currentAudioRef.current?.paused ?? true) {
+                  const msgs = [
+                    "Hey, are you still paying attention to the material?",
+                    "Let's try to focus on this section for a bit longer.",
+                    "Don't lose focus now, you're doing great!"
+                  ];
+                  const msg = msgs[Math.floor(Math.random() * msgs.length)];
+                  const tempAvatarMsg: ChatMessage = { id: Math.random().toString(), quest_id: '', role: 'avatar', text: msg, created_at: new Date().toISOString() };
+                  setMessages(prev => [...prev, tempAvatarMsg]);
+                  playTTS(msg);
+                }
+                distractionTimerRef.current = null;
+              }, 5000);
+            }
+          } else {
+            if (distractionTimerRef.current) {
+              clearTimeout(distractionTimerRef.current);
+              distractionTimerRef.current = null;
+            }
+          }
+
+          if (updatedMetrics.struggling <= 50 && updatedMetrics.distraction <= 50) {
             setAvatarEmotion('neutral');
           }
         }
@@ -717,6 +786,8 @@ export const StudyRoom: React.FC = () => {
     return () => {
         clearInterval(frameInterval);
         clearInterval(apiInterval);
+        if (distractionTimerRef.current) clearTimeout(distractionTimerRef.current);
+        if (strugglingTimerRef.current) clearTimeout(strugglingTimerRef.current);
     };
   }, [documentId, cameraActive]);
 
@@ -745,29 +816,36 @@ export const StudyRoom: React.FC = () => {
   const playTTS = async (textToSpeak: string) => {
     if (!ttsActive) return;
     try {
-      const ttsRes = await fetch('http://localhost:8000/chat/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textToSpeak })
-      });
-      if (ttsRes.ok) {
-        const blob = await ttsRes.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        
-        audio.onplay = () => setIsAvatarTalking(true);
-        audio.onended = () => setIsAvatarTalking(false);
-        audio.onpause = () => setIsAvatarTalking(false);
-
-        if (currentAudioRef.current) {
-          currentAudioRef.current.pause();
-          currentAudioRef.current.currentTime = 0;
+      let url = ttsCacheRef.current[textToSpeak];
+      
+      if (!url) {
+        const ttsRes = await fetch('http://localhost:8000/chat/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: textToSpeak })
+        });
+        if (ttsRes.ok) {
+          const blob = await ttsRes.blob();
+          url = URL.createObjectURL(blob);
+          ttsCacheRef.current[textToSpeak] = url;
+        } else {
+          console.error("TTS fetch failed with status:", ttsRes.status);
+          return;
         }
-        currentAudioRef.current = audio;
-        audio.play().catch(err => console.error("Audio playback blocked/failed:", err));
-      } else {
-        console.error("TTS fetch failed with status:", ttsRes.status);
       }
+
+      const audio = new Audio(url);
+      
+      audio.onplay = () => setIsAvatarTalking(true);
+      audio.onended = () => setIsAvatarTalking(false);
+      audio.onpause = () => setIsAvatarTalking(false);
+
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      }
+      currentAudioRef.current = audio;
+      audio.play().catch(err => console.error("Audio playback blocked/failed:", err));
     } catch (err) {
       console.error("TTS fetch failed", err);
     }
