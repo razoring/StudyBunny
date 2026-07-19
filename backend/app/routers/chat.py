@@ -57,13 +57,15 @@ def get_tts(req: TTSRequest):
     from app.config import settings
     # Rachel voice ID (default)
     url = "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM"
+    print("ElevenLabs API Key loaded:", repr(settings.eleven_labs))
     headers = {
         "Accept": "audio/mpeg",
         "Content-Type": "application/json",
         "xi-api-key": settings.eleven_labs
     }
     data = {
-        "text": req.text
+        "text": req.text,
+        "model_id": "eleven_monolingual_v1"
     }
     response = requests.post(url, json=data, headers=headers)
     if response.status_code == 200:
